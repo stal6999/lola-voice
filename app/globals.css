@@ -1,0 +1,20 @@
+@import "tailwindcss";
+
+:root {
+  --navy: #0d1530;
+  --navy2: #122050;
+  --navy3: #1a2f6b;
+  --gold: #C9A84C;
+  --gold2: #E8C96A;
+  --white: #ffffff;
+  --gray: #8A9BB5;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--navy);
+  color: var(--white);
+  font-family: 'Inter', system-ui, sans-serif;
+  min-height: 100vh;
+}
