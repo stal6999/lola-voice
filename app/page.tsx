@@ -16,8 +16,8 @@ export default function LolaPage() {
   const recognitionRef = useRef<any>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const messagesRef = useRef<Message[]>([])
+  const silenceTimerRef = useRef<NodeJS.Timeout | null>(null)
 
-  // Sync ref with state for callbacks
   useEffect(() => { messagesRef.current = messages }, [messages])
 
   useEffect(() => {
@@ -41,8 +41,6 @@ export default function LolaPage() {
       const updated = [...history, lolaMsg]
       setMessages(updated)
       setLoading(false)
-
-      // TTS auto
       playTTS(data.text)
     } catch {
       setLoading(false)
@@ -56,10 +54,7 @@ export default function LolaPage() {
       const res  = await fetch('/api/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) })
       const blob = await res.blob()
       const url  = URL.createObjectURL(blob)
-
-      // Stop previous audio
       if (audioRef.current) { audioRef.current.pause(); audioRef.current = null }
-
       const audio = new Audio(url)
       audioRef.current = audio
       audio.onended = () => { setSpeaking(false); audioRef.current = null }
@@ -70,7 +65,7 @@ export default function LolaPage() {
     }
   }
 
-  /* ── SPEECH RECOGNITION (Web Speech API — gratuit, navigateur natif) ── */
+  /* ── SPEECH RECOGNITION avec détection de silence ── */
   function toggleListening() {
     if (listening) {
       stopListening()
@@ -80,23 +75,32 @@ export default function LolaPage() {
   }
 
   function startListening() {
-    // Stop Lola if she's speaking
     if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; setSpeaking(false) }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
-
-    if (!SpeechRecognition) {
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+    if (!SR) {
       alert('Ton navigateur ne supporte pas la reconnaissance vocale. Utilise Chrome ou Safari.')
       return
     }
 
-    const recognition = new SpeechRecognition()
+    const recognition = new SR()
     recognition.lang = 'fr-FR'
     recognition.continuous = true
     recognition.interimResults = true
 
     let finalTranscript = ''
+    let hasSpoken = false
+
+    function resetSilenceTimer() {
+      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current)
+      silenceTimerRef.current = setTimeout(() => {
+        // 1.5s de silence après avoir parlé → on envoie
+        if (hasSpoken && finalTranscript.trim()) {
+          recognition.stop()
+        }
+      }, 1500)
+    }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     recognition.onresult = (event: any) => {
@@ -105,14 +109,18 @@ export default function LolaPage() {
         const t = event.results[i][0].transcript
         if (event.results[i].isFinal) {
           finalTranscript += t + ' '
+          hasSpoken = true
         } else {
           interim = t
+          hasSpoken = true
         }
       }
       setLiveTranscript(finalTranscript + interim)
+      resetSilenceTimer()
     }
 
     recognition.onend = () => {
+      if (silenceTimerRef.current) { clearTimeout(silenceTimerRef.current); silenceTimerRef.current = null }
       setListening(false)
       const text = finalTranscript.trim()
       if (text) {
@@ -122,6 +130,7 @@ export default function LolaPage() {
     }
 
     recognition.onerror = () => {
+      if (silenceTimerRef.current) { clearTimeout(silenceTimerRef.current); silenceTimerRef.current = null }
       setListening(false)
       setLiveTranscript('')
     }
@@ -132,39 +141,68 @@ export default function LolaPage() {
   }
 
   function stopListening() {
+    if (silenceTimerRef.current) { clearTimeout(silenceTimerRef.current); silenceTimerRef.current = null }
     recognitionRef.current?.stop()
     setListening(false)
   }
 
   return (
-    <div style={{ minHeight: '100vh', height: '100vh', background: '#0d1530', display: 'flex', flexDirection: 'column', fontFamily: 'Inter, system-ui, sans-serif' }}>
+    <div style={{
+      minHeight: '100dvh',
+      background: '#0d1530', display: 'flex', flexDirection: 'column',
+      fontFamily: '-apple-system, BlinkMacSystemFont, Inter, system-ui, sans-serif',
+      position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+    }}>
 
       {/* ── HEADER ── */}
-      <header style={{ background: '#122050', borderBottom: '1px solid rgba(201,168,76,.2)', padding: '16px 24px', display: 'flex', alignItems: 'center', gap: 14, flexShrink: 0 }}>
-        <div style={{ position: 'relative' }}>
-          <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'linear-gradient(135deg,#C9A84C,#E8C96A)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, fontWeight: 800, color: '#0d1530' }}>L</div>
-          {(speaking || listening) && <div style={{ position: 'absolute', bottom: 2, right: 2, width: 12, height: 12, borderRadius: '50%', background: listening ? '#e74c3c' : '#2ecc71', border: '2px solid #0d1530', animation: 'pulse 1s infinite' }} />}
+      <header style={{
+        background: '#122050', borderBottom: '1px solid rgba(201,168,76,.2)',
+        padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0,
+      }}>
+        <div style={{ position: 'relative', flexShrink: 0 }}>
+          <div style={{
+            width: 42, height: 42, borderRadius: '50%',
+            background: 'linear-gradient(135deg,#C9A84C,#E8C96A)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 18, fontWeight: 800, color: '#0d1530',
+          }}>L</div>
+          {(speaking || listening) && (
+            <div style={{
+              position: 'absolute', bottom: 1, right: 1, width: 10, height: 10,
+              borderRadius: '50%', background: listening ? '#e74c3c' : '#2ecc71',
+              border: '2px solid #122050', animation: 'pulse 1s infinite',
+            }} />
+          )}
         </div>
-        <div>
-          <div style={{ fontFamily: 'Georgia, serif', fontSize: 20, fontWeight: 700, color: '#C9A84C' }}>Lola</div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontFamily: 'Georgia, serif', fontSize: 18, fontWeight: 700, color: '#C9A84C' }}>Lola</div>
           <div style={{ fontSize: 11, color: '#8A9BB5' }}>
-            {listening ? '🎙 Je t\'écoute…' : speaking ? '🔊 En train de parler…' : loading ? '⌛ En réflexion…' : '● Disponible'}
+            {listening ? '🎙 Je t\u2019écoute…' : speaking ? '🔊 Je parle…' : loading ? '⌛ Réflexion…' : '● Disponible'}
           </div>
         </div>
-        <div style={{ marginLeft: 'auto', fontSize: 11, color: '#8A9BB5' }}>TC Expertise & Énergie</div>
       </header>
 
       {/* ── MESSAGES ── */}
-      <main style={{ flex: 1, overflowY: 'auto', padding: '24px 16px', display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 720, width: '100%', margin: '0 auto' }}>
+      <main style={{
+        flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch',
+        padding: '16px 12px', display: 'flex', flexDirection: 'column', gap: 12,
+      }}>
 
         {messages.length === 0 && !listening && (
-          <div style={{ textAlign: 'center', marginTop: 60 }}>
-            <div style={{ fontFamily: 'Georgia, serif', fontSize: 32, fontWeight: 800, color: '#C9A84C', marginBottom: 12 }}>Bonjour Christophe.</div>
-            <div style={{ fontSize: 15, color: '#8A9BB5', lineHeight: 1.7 }}>Je suis Lola, ton assistante.<br />Écris-moi ou appuie sur le micro pour me parler.</div>
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginTop: 32, flexWrap: 'wrap' }}>
-              {['Quel est mon planning du jour ?', 'Résume les urgences', 'Aide-moi pour un mail'].map(s => (
+          <div style={{ textAlign: 'center', marginTop: 40, padding: '0 16px' }}>
+            <div style={{ fontFamily: 'Georgia, serif', fontSize: 28, fontWeight: 800, color: '#C9A84C', marginBottom: 10 }}>
+              Bonjour Christophe.
+            </div>
+            <div style={{ fontSize: 14, color: '#8A9BB5', lineHeight: 1.7 }}>
+              Je suis Lola, ton assistante.<br />Appuie sur le micro et parle-moi.
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginTop: 24, flexWrap: 'wrap' }}>
+              {['Mon planning ?', 'Urgences Jérôme', 'Rédiger un mail'].map(s => (
                 <button key={s} onClick={() => sendMessage(s)}
-                  style={{ background: 'rgba(201,168,76,.1)', border: '1px solid rgba(201,168,76,.3)', borderRadius: 20, padding: '8px 16px', color: '#E8C96A', fontSize: 13, cursor: 'pointer' }}>
+                  style={{
+                    background: 'rgba(201,168,76,.1)', border: '1px solid rgba(201,168,76,.3)',
+                    borderRadius: 16, padding: '8px 14px', color: '#E8C96A', fontSize: 12, cursor: 'pointer',
+                  }}>
                   {s}
                 </button>
               ))}
@@ -173,45 +211,94 @@ export default function LolaPage() {
         )}
 
         {messages.map((m, i) => (
-          <div key={i} style={{ display: 'flex', justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start', gap: 10, alignItems: 'flex-end' }}>
+          <div key={i} style={{
+            display: 'flex', justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start',
+            gap: 8, alignItems: 'flex-end',
+          }}>
             {m.role === 'assistant' && (
-              <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'linear-gradient(135deg,#C9A84C,#E8C96A)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800, color: '#0d1530', flexShrink: 0 }}>L</div>
+              <div style={{
+                width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
+                background: 'linear-gradient(135deg,#C9A84C,#E8C96A)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 12, fontWeight: 800, color: '#0d1530',
+              }}>L</div>
             )}
             <div style={{
-              maxWidth: '75%', padding: '12px 16px', borderRadius: m.role === 'user' ? '18px 18px 4px 18px' : '4px 18px 18px 18px',
+              maxWidth: '80%', padding: '10px 14px',
+              borderRadius: m.role === 'user' ? '16px 16px 4px 16px' : '4px 16px 16px 16px',
               background: m.role === 'user' ? 'linear-gradient(135deg,#C9A84C,#E8C96A)' : 'rgba(255,255,255,.06)',
               border: m.role === 'assistant' ? '1px solid rgba(255,255,255,.08)' : 'none',
               color: m.role === 'user' ? '#0d1530' : '#fff',
-              fontSize: 14, lineHeight: 1.6,
+              fontSize: 14, lineHeight: 1.55,
+              wordBreak: 'break-word' as const, textAlign: 'left' as const,
             }}>
               {m.content}
             </div>
             {m.role === 'user' && (
-              <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#1a2f6b', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, color: '#C9A84C', flexShrink: 0 }}>C</div>
+              <div style={{
+                width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
+                background: '#1a2f6b',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 12, fontWeight: 700, color: '#C9A84C',
+              }}>C</div>
             )}
           </div>
         ))}
 
-        {/* Live transcript while listening */}
+        {/* Live transcript */}
         {listening && liveTranscript && (
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, alignItems: 'flex-end' }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, alignItems: 'flex-end' }}>
             <div style={{
-              maxWidth: '75%', padding: '12px 16px', borderRadius: '18px 18px 4px 18px',
-              background: 'rgba(201,168,76,.3)', border: '1px dashed #C9A84C',
-              color: '#E8C96A', fontSize: 14, lineHeight: 1.6, fontStyle: 'italic',
+              maxWidth: '80%', padding: '10px 14px',
+              borderRadius: '16px 16px 4px 16px',
+              background: 'rgba(201,168,76,.2)', border: '1px dashed rgba(201,168,76,.5)',
+              color: '#E8C96A', fontSize: 14, lineHeight: 1.55, fontStyle: 'italic',
+              wordBreak: 'break-word' as const, textAlign: 'left' as const,
             }}>
               {liveTranscript}…
             </div>
-            <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#1a2f6b', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, color: '#C9A84C', flexShrink: 0 }}>C</div>
+            <div style={{
+              width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
+              background: '#1a2f6b',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 12, fontWeight: 700, color: '#C9A84C',
+            }}>C</div>
+          </div>
+        )}
+
+        {/* Listening indicator without text yet */}
+        {listening && !liveTranscript && (
+          <div style={{ textAlign: 'center', padding: '20px 0' }}>
+            <div style={{
+              display: 'inline-flex', gap: 4, alignItems: 'center',
+              background: 'rgba(231,76,60,.1)', border: '1px solid rgba(231,76,60,.3)',
+              borderRadius: 20, padding: '8px 16px',
+            }}>
+              <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#e74c3c', animation: 'pulse 0.8s infinite' }} />
+              <span style={{ fontSize: 13, color: '#e74c3c', marginLeft: 6 }}>Je t&apos;écoute… parle librement</span>
+            </div>
           </div>
         )}
 
         {loading && (
-          <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
-            <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'linear-gradient(135deg,#C9A84C,#E8C96A)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800, color: '#0d1530' }}>L</div>
-            <div style={{ background: 'rgba(255,255,255,.06)', border: '1px solid rgba(255,255,255,.08)', borderRadius: '4px 18px 18px 18px', padding: '14px 18px' }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+            <div style={{
+              width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
+              background: 'linear-gradient(135deg,#C9A84C,#E8C96A)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 12, fontWeight: 800, color: '#0d1530',
+            }}>L</div>
+            <div style={{
+              background: 'rgba(255,255,255,.06)', border: '1px solid rgba(255,255,255,.08)',
+              borderRadius: '4px 16px 16px 16px', padding: '12px 16px',
+            }}>
               <div style={{ display: 'flex', gap: 5 }}>
-                {[0,1,2].map(i => <div key={i} style={{ width: 8, height: 8, borderRadius: '50%', background: '#C9A84C', opacity: 0.4, animation: `bounce 1s ${i*0.2}s infinite` }} />)}
+                {[0,1,2].map(i => (
+                  <div key={i} style={{
+                    width: 7, height: 7, borderRadius: '50%', background: '#C9A84C',
+                    opacity: 0.4, animation: `bounce 1s ${i*0.2}s infinite`,
+                  }} />
+                ))}
               </div>
             </div>
           </div>
@@ -220,15 +307,21 @@ export default function LolaPage() {
       </main>
 
       {/* ── INPUT ── */}
-      <footer style={{ background: '#122050', borderTop: '1px solid rgba(201,168,76,.15)', padding: '16px 16px 20px', flexShrink: 0 }}>
-        <div style={{ maxWidth: 720, margin: '0 auto', display: 'flex', gap: 10, alignItems: 'flex-end' }}>
+      <footer style={{
+        background: '#122050', borderTop: '1px solid rgba(201,168,76,.15)',
+        padding: '10px 12px', paddingBottom: 'max(10px, env(safe-area-inset-bottom))',
+        flexShrink: 0,
+      }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
 
-          {/* Micro — gros bouton central si pas de texte */}
+          {/* Micro */}
           <button onClick={toggleListening}
-            style={{ width: 48, height: 48, borderRadius: '50%', border: 'none', cursor: 'pointer', flexShrink: 0, transition: 'all .2s',
+            style={{
+              width: 44, height: 44, borderRadius: '50%', border: 'none', cursor: 'pointer', flexShrink: 0,
+              transition: 'all .2s',
               background: listening ? '#e74c3c' : 'rgba(201,168,76,.15)',
-              color: listening ? '#fff' : '#C9A84C', fontSize: 20,
-              boxShadow: listening ? '0 0 20px rgba(231,76,60,.4)' : 'none',
+              color: listening ? '#fff' : '#C9A84C', fontSize: 18,
+              boxShadow: listening ? '0 0 16px rgba(231,76,60,.4)' : 'none',
             }}>
             {listening ? '⏹' : '🎙'}
           </button>
@@ -236,18 +329,25 @@ export default function LolaPage() {
           {/* Texte */}
           <textarea value={input} onChange={e => setInput(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(input) } }}
-            placeholder={listening ? 'Je t\'écoute…' : 'Écris à Lola… (Entrée pour envoyer)'}
+            placeholder={listening ? 'Je t\u2019écoute…' : 'Écris à Lola…'}
             rows={1}
             disabled={listening}
-            style={{ flex: 1, background: 'rgba(255,255,255,.06)', border: '1px solid rgba(255,255,255,.12)', borderRadius: 24, padding: '12px 18px',
-              color: '#fff', fontSize: 14, resize: 'none', outline: 'none', lineHeight: 1.5, fontFamily: 'inherit',
-              opacity: listening ? 0.4 : 1 }} />
+            style={{
+              flex: 1, background: 'rgba(255,255,255,.06)', border: '1px solid rgba(255,255,255,.12)',
+              borderRadius: 22, padding: '10px 16px',
+              color: '#fff', fontSize: 14, resize: 'none', outline: 'none',
+              lineHeight: 1.5, fontFamily: 'inherit',
+              opacity: listening ? 0.3 : 1,
+            }} />
 
           {/* Envoyer */}
           <button onClick={() => sendMessage(input)} disabled={!input.trim() || loading || listening}
-            style={{ width: 48, height: 48, borderRadius: '50%', border: 'none', cursor: 'pointer', flexShrink: 0, transition: 'all .2s',
+            style={{
+              width: 44, height: 44, borderRadius: '50%', border: 'none', cursor: 'pointer', flexShrink: 0,
+              transition: 'all .2s',
               background: input.trim() && !listening ? 'linear-gradient(135deg,#C9A84C,#E8C96A)' : 'rgba(255,255,255,.08)',
-              color: input.trim() && !listening ? '#0d1530' : '#8A9BB5', fontSize: 20 }}>
+              color: input.trim() && !listening ? '#0d1530' : '#8A9BB5', fontSize: 18,
+            }}>
             ➤
           </button>
         </div>
@@ -258,6 +358,7 @@ export default function LolaPage() {
         @keyframes bounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-4px)} }
         textarea::placeholder { color: #8A9BB5; }
         button:hover { opacity: .85; }
+        * { -webkit-tap-highlight-color: transparent; }
       `}</style>
     </div>
   )
