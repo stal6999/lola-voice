@@ -1,290 +1,240 @@
 'use client'
 
-import React from 'react'
+import React, { useState } from 'react'
+import DocLocker from './DocLocker'
 
 interface BatcaveSceneProps {
   width?: number
   audioActive?: boolean
+  screenContent?: string | null
+  onFileContent?: (content: string, filename: string) => void
+  onDocumentReady?: (name: string) => void
+  outputDoc?: { name: string; content: string } | null
 }
 
-export default function BatcaveScene({ width = 400, audioActive = false }: BatcaveSceneProps) {
-  const h = width * 0.7
+export default function BatcaveScene({
+  width = 400,
+  audioActive = false,
+  screenContent = null,
+  onFileContent = () => {},
+  onDocumentReady = () => {},
+  outputDoc = null,
+}: BatcaveSceneProps) {
+  const h = width * 0.82
 
   return (
-    <svg viewBox="0 0 400 280" width={width} height={h} xmlns="http://www.w3.org/2000/svg">
+    <svg viewBox="0 0 400 328" width={width} height={h} xmlns="http://www.w3.org/2000/svg">
       <defs>
-        <radialGradient id="bc-room" cx="50%" cy="55%" r="75%">
-          <stop offset="0%" stopColor="#14203e" />
-          <stop offset="45%" stopColor="#0d1530" />
-          <stop offset="100%" stopColor="#060a18" />
-        </radialGradient>
-        <radialGradient id="bc-ceiling-light" cx="50%" cy="0%" r="60%">
-          <stop offset="0%" stopColor="rgba(201,168,76,0.06)" />
+        {/* Room */}
+        <linearGradient id="bc-room-v2" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stopColor="#060a18" />
+          <stop offset="100%" stopColor="#0d1530" />
+        </linearGradient>
+        {/* Grand écran */}
+        <linearGradient id="bc-bigscreen" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stopColor="#0a1428" />
+          <stop offset="100%" stopColor="#060e20" />
+        </linearGradient>
+        {/* Screen glow */}
+        <radialGradient id="bc-screen-glow" cx="50%" cy="50%" r="55%">
+          <stop offset="0%" stopColor="rgba(100,140,220,0.12)" />
           <stop offset="100%" stopColor="rgba(0,0,0,0)" />
         </radialGradient>
-        <linearGradient id="bc-floor" x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" stopColor="rgba(201,168,76,0.04)" />
-          <stop offset="100%" stopColor="rgba(0,0,0,0.3)" />
+        {/* Floor */}
+        <linearGradient id="bc-floor-v2" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stopColor="#0f1628" />
+          <stop offset="100%" stopColor="#080e1c" />
         </linearGradient>
-        <linearGradient id="bc-screen-frame" x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" stopColor="#1a1e2e" />
-          <stop offset="100%" stopColor="#0e1220" />
+        {/* Gold accent */}
+        <linearGradient id="bc-gold" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stopColor="rgba(201,168,76,0)" />
+          <stop offset="50%" stopColor="rgba(201,168,76,0.6)" />
+          <stop offset="100%" stopColor="rgba(201,168,76,0)" />
         </linearGradient>
-        <linearGradient id="bc-screen1" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#0f1a35" />
-          <stop offset="100%" stopColor="#0a1228" />
-        </linearGradient>
-        <linearGradient id="bc-screen2" x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" stopColor="#101e38" />
-          <stop offset="100%" stopColor="#0b1525" />
-        </linearGradient>
-        <radialGradient id="bc-glow" cx="50%" cy="50%" r="60%">
-          <stop offset="0%" stopColor="rgba(100,160,220,0.12)" />
-          <stop offset="100%" stopColor="rgba(0,0,0,0)" />
-        </radialGradient>
-        <radialGradient id="bc-gold-glow" cx="50%" cy="100%" r="50%">
-          <stop offset="0%" stopColor="rgba(201,168,76,0.06)" />
-          <stop offset="100%" stopColor="rgba(0,0,0,0)" />
-        </radialGradient>
-        <filter id="bc-bloom">
-          <feGaussianBlur stdDeviation="4" />
+        <filter id="bc-glow-filter">
+          <feGaussianBlur stdDeviation="3" />
         </filter>
-        <filter id="bc-slight-blur">
-          <feGaussianBlur stdDeviation="0.5" />
+        <filter id="bc-text-glow">
+          <feGaussianBlur stdDeviation="1" />
         </filter>
+        <clipPath id="bc-screen-clip">
+          <rect x="52" y="8" width="296" height="165" rx="4" />
+        </clipPath>
       </defs>
 
-      {/* Room */}
-      <rect width="400" height="280" fill="url(#bc-room)" />
-      <rect width="400" height="280" fill="url(#bc-ceiling-light)" />
+      {/* ── ROOM BACKGROUND ── */}
+      <rect width="400" height="328" fill="url(#bc-room-v2)" />
 
-      {/* Wall panels subtle */}
-      <line x1="0" y1="0" x2="30" y2="50" stroke="rgba(201,168,76,0.02)" strokeWidth="0.5" />
-      <line x1="400" y1="0" x2="370" y2="50" stroke="rgba(201,168,76,0.02)" strokeWidth="0.5" />
-      <line x1="200" y1="0" x2="200" y2="50" stroke="rgba(201,168,76,0.015)" strokeWidth="0.5" />
+      {/* Wall panels */}
+      <line x1="0" y1="180" x2="400" y2="180" stroke="rgba(201,168,76,0.04)" strokeWidth="0.5" />
+      <line x1="50" y1="0" x2="50" y2="180" stroke="rgba(201,168,76,0.03)" strokeWidth="0.5" />
+      <line x1="350" y1="0" x2="350" y2="180" stroke="rgba(201,168,76,0.03)" strokeWidth="0.5" />
 
-      {/* Floor with reflection */}
-      <rect x="0" y="210" width="400" height="70" fill="url(#bc-floor)" />
-      <line x1="20" y1="210" x2="380" y2="210" stroke="rgba(201,168,76,0.08)" strokeWidth="0.5" />
+      {/* ── GRAND ÉCRAN MURAL ── */}
+      {/* Frame outer */}
+      <rect x="48" y="5" width="304" height="172" rx="6"
+        fill="#080e1c" stroke="rgba(201,168,76,0.25)" strokeWidth="1.5" />
+      {/* Screen bezel glow */}
+      <rect x="48" y="5" width="304" height="172" rx="6"
+        fill="none" stroke="rgba(100,140,220,0.08)" strokeWidth="8" filter="url(#bc-glow-filter)" />
 
-      {/* Floor grid lines (perspective) */}
-      {[0,1,2,3,4].map(i => (
-        <line key={`fg${i}`}
-          x1={80 + i * 60} y1="210" x2={60 + i * 70} y2="280"
-          stroke="rgba(201,168,76,0.02)" strokeWidth="0.5" />
-      ))}
+      {/* Screen surface */}
+      <rect x="52" y="8" width="296" height="165" rx="4" fill="url(#bc-bigscreen)" />
 
-      {/* Ambient screen glow behind monitors */}
-      <ellipse cx="200" cy="110" rx="160" ry="90" fill="url(#bc-glow)" filter="url(#bc-bloom)" />
+      {/* Screen content */}
+      <g clipPath="url(#bc-screen-clip)">
+        {screenContent ? (
+          // Contenu texte
+          <foreignObject x="52" y="8" width="296" height="165">
+            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+            <div {...{ xmlns: 'http://www.w3.org/1999/xhtml' } as any} style={{
+              width: '100%', height: '100%', padding: '12px 16px', overflow: 'hidden',
+              fontFamily: 'Georgia, serif', fontSize: 11, color: '#e8f0ff', lineHeight: 1.6,
+              whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+            }}>
+              {screenContent}
+            </div>
+          </foreignObject>
+        ) : (
+          // Idle — grille tech animée
+          <g>
+            {/* Grid */}
+            {[0,1,2,3,4,5,6,7,8].map(i => (
+              <line key={`gl${i}`} x1={52 + i * 37} y1="8" x2={52 + i * 37} y2="173"
+                stroke="rgba(100,140,220,0.04)" strokeWidth="0.5" />
+            ))}
+            {[0,1,2,3,4].map(i => (
+              <line key={`gh${i}`} x1="52" y1={8 + i * 33} x2="348" y2={8 + i * 33}
+                stroke="rgba(100,140,220,0.04)" strokeWidth="0.5" />
+            ))}
 
-      {/* ── 6 MONITORS ── */}
-      {/* Top row */}
-      {[0, 1, 2].map(i => {
-        const x = 98 + i * 72
-        const screenW = 64
-        const screenH = 44
-        return (
-          <g key={`mt${i}`}>
-            {/* Monitor body */}
-            <rect x={x - 2} y="56" width={screenW + 4} height={screenH + 6} rx="3"
-              fill="url(#bc-screen-frame)" stroke="rgba(201,168,76,0.12)" strokeWidth="0.5" />
-            {/* Screen */}
-            <rect x={x} y="58" width={screenW} height={screenH} rx="1.5"
-              fill={i === 1 ? 'url(#bc-screen2)' : 'url(#bc-screen1)'} />
+            {/* Ambient glow center */}
+            <ellipse cx="200" cy="90" rx="120" ry="60" fill="url(#bc-screen-glow)" />
 
-            {/* Screen content per monitor */}
-            {i === 0 && (
-              <>
-                {/* Client data / table */}
-                <text x={x + 4} y="68" fontSize="3.5" fill="rgba(201,168,76,0.5)" fontFamily="monospace">CLIENTS</text>
-                {[0,1,2,3,4].map(j => (
-                  <g key={`cl${j}`}>
-                    <rect x={x + 4} y={72 + j * 5.5} width={j === 2 ? 40 : 25 + j * 4} height="2.5" rx="0.5"
-                      fill={j === 0 ? 'rgba(46,204,113,0.2)' : 'rgba(138,155,181,0.1)'} />
-                  </g>
-                ))}
-              </>
-            )}
-            {i === 1 && (
-              <>
-                {/* Main dashboard with chart */}
-                <text x={x + 4} y="68" fontSize="3.5" fill="rgba(201,168,76,0.5)" fontFamily="monospace">TC EXPERTISE</text>
-                <polyline
-                  points={`${x+6},92 ${x+14},86 ${x+22},89 ${x+30},78 ${x+38},82 ${x+46},74 ${x+54},70 ${x+60},72`}
-                  fill="none" stroke="rgba(201,168,76,0.45)" strokeWidth="1.5" strokeLinejoin="round" />
-                {/* Area fill */}
-                <polygon
-                  points={`${x+6},92 ${x+14},86 ${x+22},89 ${x+30},78 ${x+38},82 ${x+46},74 ${x+54},70 ${x+60},72 ${x+60},98 ${x+6},98`}
-                  fill="rgba(201,168,76,0.06)" />
-                {/* Stats */}
-                <rect x={x + 4} y="95" width="18" height="3" rx="0.5" fill="rgba(46,204,113,0.15)" />
-                <rect x={x + 26} y="95" width="15" height="3" rx="0.5" fill="rgba(201,168,76,0.12)" />
-              </>
-            )}
-            {i === 2 && (
-              <>
-                {/* Messages / notifications */}
-                <text x={x + 4} y="68" fontSize="3.5" fill="rgba(201,168,76,0.5)" fontFamily="monospace">MESSAGES</text>
-                {[0,1,2,3].map(j => (
-                  <g key={`msg${j}`}>
-                    <circle cx={x + 8} cy={74 + j * 7} r="2" fill={j === 0 ? 'rgba(201,168,76,0.2)' : 'rgba(138,155,181,0.08)'} />
-                    <rect x={x + 13} y={72 + j * 7} width={20 + (j * 7) % 25} height="2" rx="0.5"
-                      fill={j === 0 ? 'rgba(201,168,76,0.15)' : 'rgba(138,155,181,0.08)'} />
-                  </g>
-                ))}
-              </>
-            )}
+            {/* Logo/monogram */}
+            <text x="200" y="82" textAnchor="middle"
+              fontFamily="Georgia, serif" fontSize="36" fontWeight="700"
+              fill="rgba(201,168,76,0.06)">LOLA</text>
+            <text x="200" y="100" textAnchor="middle"
+              fontFamily="monospace" fontSize="7" letterSpacing="4"
+              fill="rgba(201,168,76,0.15)">TC EXPERTISE & ÉNERGIE</text>
+
+            {/* Data lines idle */}
+            {[0,1,2,3,4,5].map(i => (
+              <rect key={`dl${i}`} x={70 + Math.sin(i * 1.2) * 20} y={115 + i * 8}
+                width={40 + Math.cos(i) * 30} height="1.5" rx="0.5"
+                fill="rgba(100,140,220,0.08)">
+                <animate attributeName="opacity" values="0.5;1;0.5"
+                  dur={`${2 + i * 0.4}s`} repeatCount="indefinite" />
+              </rect>
+            ))}
+
+            {/* Waveform when audio active */}
+            {audioActive && [0,1,2,3,4,5,6,7,8,9,10,11].map(i => {
+              const barH = 5 + Math.sin(i * 0.9) * 18
+              return (
+                <rect key={`aw${i}`} x={148 + i * 9} y={90 - barH / 2}
+                  width="5" height={barH} rx="2"
+                  fill="rgba(201,168,76,0.35)">
+                  <animate attributeName="height"
+                    values={`${barH};${4 + Math.random() * 24};${barH}`}
+                    dur={`${0.25 + i * 0.04}s`} repeatCount="indefinite" />
+                  <animate attributeName="y"
+                    values={`${90 - barH / 2};${90 - (4 + Math.random() * 24) / 2};${90 - barH / 2}`}
+                    dur={`${0.25 + i * 0.04}s`} repeatCount="indefinite" />
+                </rect>
+              )
+            })}
+
+            {/* Corner brackets */}
+            {[{ x: 58, y: 14 }, { x: 336, y: 14 }, { x: 58, y: 162 }, { x: 336, y: 162 }].map((c, i) => (
+              <g key={`bc${i}`}>
+                <line x1={c.x} y1={c.y} x2={c.x + (i % 2 === 0 ? 8 : -8)} y2={c.y}
+                  stroke="rgba(201,168,76,0.3)" strokeWidth="1" />
+                <line x1={c.x} y1={c.y} x2={c.x} y2={c.y + (i < 2 ? 8 : -8)}
+                  stroke="rgba(201,168,76,0.3)" strokeWidth="1" />
+              </g>
+            ))}
           </g>
-        )
-      })}
+        )}
+      </g>
 
-      {/* Bottom row */}
-      {[0, 1, 2].map(i => {
-        const x = 98 + i * 72
-        const screenW = 64
-        const screenH = 44
-        return (
-          <g key={`mb${i}`}>
-            <rect x={x - 2} y="112" width={screenW + 4} height={screenH + 6} rx="3"
-              fill="url(#bc-screen-frame)" stroke="rgba(201,168,76,0.15)" strokeWidth="0.5" />
-            <rect x={x} y="114" width={screenW} height={screenH} rx="1.5"
-              fill={i === 0 ? 'url(#bc-screen2)' : 'url(#bc-screen1)'} />
+      {/* Screen top LED strip */}
+      <rect x="52" y="8" width="296" height="2" rx="1" fill="url(#bc-gold)" opacity="0.5">
+        <animate attributeName="opacity" values="0.3;0.7;0.3" dur="4s" repeatCount="indefinite" />
+      </rect>
 
-            {i === 0 && (
-              <>
-                {/* Energy prices */}
-                <text x={x + 4} y="124" fontSize="3.5" fill="rgba(46,204,113,0.5)" fontFamily="monospace">TARIFS</text>
-                {[0,1,2,3].map(j => (
-                  <g key={`pr${j}`}>
-                    <rect x={x + 4} y={128 + j * 6} width="20" height="3" rx="0.5"
-                      fill="rgba(138,155,181,0.08)" />
-                    <rect x={x + 28} y={128 + j * 6} width={12 + j * 3} height="3" rx="0.5"
-                      fill={j === 0 ? 'rgba(46,204,113,0.2)' : j === 3 ? 'rgba(231,76,60,0.15)' : 'rgba(201,168,76,0.1)'} />
-                  </g>
-                ))}
-              </>
-            )}
-            {i === 1 && (
-              <>
-                {/* Audio waveform — active when speaking */}
-                <text x={x + 4} y="124" fontSize="3.5" fill="rgba(201,168,76,0.5)" fontFamily="monospace">AUDIO</text>
-                {[0,1,2,3,4,5,6,7,8,9,10,11].map(j => {
-                  const barH = audioActive ? 5 + Math.sin(j * 0.8) * 12 : 2
-                  return (
-                    <rect key={`aw${j}`} x={x + 6 + j * 4.5} y={145 - barH / 2} width="2.5" height={barH} rx="0.5"
-                      fill={audioActive ? 'rgba(201,168,76,0.4)' : 'rgba(138,155,181,0.1)'}>
-                      {audioActive && (
-                        <animate attributeName="height"
-                          values={`${barH};${3 + Math.random() * 18};${barH}`}
-                          dur={`${0.3 + j * 0.05}s`} repeatCount="indefinite" />
-                      )}
-                    </rect>
-                  )
-                })}
-              </>
-            )}
-            {i === 2 && (
-              <>
-                {/* Calendar / tasks */}
-                <text x={x + 4} y="124" fontSize="3.5" fill="rgba(201,168,76,0.5)" fontFamily="monospace">AGENDA</text>
-                {[0,1,2].map(j => (
-                  <g key={`cal${j}`}>
-                    <rect x={x + 4} y={128 + j * 9} width="52" height="6" rx="1"
-                      fill={j === 0 ? 'rgba(201,168,76,0.08)' : 'rgba(138,155,181,0.04)'}
-                      stroke={j === 0 ? 'rgba(201,168,76,0.15)' : 'rgba(138,155,181,0.06)'}
-                      strokeWidth="0.3" />
-                    <rect x={x + 6} y={130 + j * 9} width={20 + j * 8} height="2" rx="0.5"
-                      fill="rgba(138,155,181,0.1)" />
-                  </g>
-                ))}
-              </>
-            )}
+      {/* Screen mount/stand */}
+      <rect x="190" y="177" width="20" height="10" fill="#0a0e1a" />
+      <rect x="165" y="186" width="70" height="3" rx="1" fill="#0a0e1a" stroke="rgba(201,168,76,0.1)" strokeWidth="0.5" />
 
-            {/* Monitor stands */}
-            <rect x={x + 26} y="162" width="12" height="10" rx="1" fill="#0e1220" />
-            <ellipse cx={x + 32} cy="174" rx="14" ry="3" fill="#0c1020" />
-          </g>
-        )
-      })}
+      {/* ── FLOOR ── */}
+      <rect x="0" y="245" width="400" height="83" fill="url(#bc-floor-v2)" />
+      <line x1="0" y1="245" x2="400" y2="245" stroke="rgba(201,168,76,0.12)" strokeWidth="1" />
 
-      {/* ── DESK SURFACE ── */}
-      <path d="M 60,200 L 340,200 L 355,215 L 45,215 Z"
-        fill="#141828" stroke="rgba(201,168,76,0.12)" strokeWidth="0.5" />
-      {/* Desk edge accent */}
-      <line x1="60" y1="200" x2="340" y2="200" stroke="rgba(201,168,76,0.2)" strokeWidth="1.2" />
-      {/* Desk underside */}
-      <path d="M 45,215 L 355,215 L 360,220 L 40,220 Z" fill="#0e1220" />
+      {/* Floor reflection of screen */}
+      <rect x="52" y="246" width="296" height="30" rx="2"
+        fill="rgba(100,140,220,0.03)" />
+
+      {/* ── DESK ── */}
+      <path d="M 44,235 L 356,235 L 368,248 L 32,248 Z" fill="#111828" stroke="rgba(201,168,76,0.15)" strokeWidth="0.8" />
+      <line x1="44" y1="235" x2="356" y2="235" stroke="rgba(201,168,76,0.2)" strokeWidth="1" />
+      <path d="M 32,248 L 368,248 L 368,252 L 32,252 Z" fill="#0c1220" />
 
       {/* Desk legs */}
-      <rect x="70" y="220" width="5" height="35" rx="1" fill="#111525" />
-      <rect x="325" y="220" width="5" height="35" rx="1" fill="#111525" />
+      <rect x="55" y="252" width="5" height="40" rx="1" fill="#0c1220" />
+      <rect x="340" y="252" width="5" height="40" rx="1" fill="#0c1220" />
+
+      {/* LED strip sous bureau */}
+      <line x1="60" y1="251" x2="340" y2="251" stroke="rgba(201,168,76,0.07)" strokeWidth="1.5">
+        <animate attributeName="opacity" values="0.5;1;0.5" dur="5s" repeatCount="indefinite" />
+      </line>
 
       {/* ── DESK ITEMS ── */}
       {/* Keyboard */}
-      <rect x="155" y="203" width="90" height="12" rx="3" fill="#0f1325"
-        stroke="rgba(201,168,76,0.08)" strokeWidth="0.5" />
-      {/* Keys */}
-      {[0,1,2,3,4,5,6,7,8,9,10].map(i => (
-        <rect key={`key${i}`} x={159 + i * 7.5} y="205" width="5" height="3.5" rx="0.5"
+      <rect x="155" y="237" width="90" height="11" rx="2.5" fill="#0d1122" stroke="rgba(201,168,76,0.08)" strokeWidth="0.5" />
+      {[0,1,2,3,4,5,6,7,8,9].map(i => (
+        <rect key={`k${i}`} x={159 + i * 8} y="239" width="5.5" height="3" rx="0.5"
           fill="rgba(201,168,76,0.03)" stroke="rgba(201,168,76,0.06)" strokeWidth="0.2" />
       ))}
-      {/* Spacebar */}
-      <rect x="175" y="210" width="30" height="3" rx="0.5" fill="rgba(201,168,76,0.02)"
-        stroke="rgba(201,168,76,0.06)" strokeWidth="0.2" />
+      <rect x="174" y="243" width="28" height="3" rx="0.5" fill="rgba(201,168,76,0.02)" stroke="rgba(201,168,76,0.05)" strokeWidth="0.2" />
 
       {/* Mouse */}
-      <ellipse cx="265" cy="208" rx="7" ry="5" fill="#0f1325" stroke="rgba(201,168,76,0.08)" strokeWidth="0.5" />
-      <line x1="265" y1="204" x2="265" y2="207" stroke="rgba(201,168,76,0.1)" strokeWidth="0.3" />
+      <ellipse cx="265" cy="242" rx="7" ry="4.5" fill="#0d1122" stroke="rgba(201,168,76,0.08)" strokeWidth="0.5" />
+      <line x1="265" y1="238" x2="265" y2="241" stroke="rgba(201,168,76,0.1)" strokeWidth="0.3" />
 
-      {/* Coffee mug */}
-      <g>
-        <rect x="100" y="202" width="12" height="10" rx="2.5" fill="#1a2040"
-          stroke="rgba(201,168,76,0.12)" strokeWidth="0.5" />
-        <path d="M 112,204 Q 117,204 117,208 Q 117,212 112,212" fill="none"
-          stroke="rgba(201,168,76,0.1)" strokeWidth="0.5" />
-        {/* Steam */}
-        <path d="M 103,201 Q 104,197 103,194" fill="none" stroke="rgba(200,200,200,0.06)" strokeWidth="0.5">
-          <animate attributeName="d" values="M103,201 Q104,197 103,194;M103,201 Q102,197 104,194;M103,201 Q104,197 103,194"
-            dur="3s" repeatCount="indefinite" />
-        </path>
-        <path d="M 106,200 Q 107,196 106,192" fill="none" stroke="rgba(200,200,200,0.04)" strokeWidth="0.5">
-          <animate attributeName="d" values="M106,200 Q107,196 106,192;M106,200 Q105,196 107,192;M106,200 Q107,196 106,192"
-            dur="4s" repeatCount="indefinite" />
-        </path>
-      </g>
+      {/* Mug + vapeur */}
+      <rect x="302" y="233" width="11" height="9" rx="2" fill="#1a2040" stroke="rgba(201,168,76,0.12)" strokeWidth="0.5" />
+      <path d="M 313,235 Q 316,235 316,238 Q 316,241 313,241" fill="none" stroke="rgba(201,168,76,0.1)" strokeWidth="0.5" />
+      <path d="M 305,232 Q 306,229 305,226" fill="none" stroke="rgba(200,200,200,0.06)" strokeWidth="0.5">
+        <animate attributeName="d" values="M305,232 Q306,229 305,226;M305,232 Q304,229 306,226;M305,232 Q306,229 305,226" dur="3s" repeatCount="indefinite" />
+      </path>
 
-      {/* Notebook / tablet */}
-      <rect x="290" y="203" width="28" height="9" rx="1.5" fill="#141830"
-        stroke="rgba(201,168,76,0.08)" strokeWidth="0.3" />
-      <rect x="292" y="204" width="24" height="7" rx="1" fill="rgba(201,168,76,0.02)" />
+      {/* Tablet */}
+      <rect x="116" y="235" width="22" height="9" rx="1.5" fill="#0e1525" stroke="rgba(201,168,76,0.06)" strokeWidth="0.3" />
+      <rect x="118" y="236" width="18" height="7" rx="1" fill="rgba(100,140,220,0.04)" />
 
-      {/* ── AMBIENT ELEMENTS ── */}
-      {/* LED strip under desk */}
-      <line x1="75" y1="219" x2="325" y2="219" stroke="rgba(201,168,76,0.06)" strokeWidth="1.5">
-        <animate attributeName="stroke-opacity" values="0.06;0.1;0.06" dur="4s" repeatCount="indefinite" />
-      </line>
+      {/* Plant */}
+      <rect x="330" y="232" width="8" height="6" rx="1.5" fill="#1a2040" />
+      <path d="M 334,232 Q 332,228 334,225 Q 336,228 334,232" fill="rgba(46,204,113,0.2)" />
+      <path d="M 334,231 Q 330,227 332,224" fill="none" stroke="rgba(46,204,113,0.15)" strokeWidth="0.5" />
+      <path d="M 334,231 Q 337,227 336,224" fill="none" stroke="rgba(46,204,113,0.1)" strokeWidth="0.5" />
 
-      {/* Status LEDs on monitors */}
-      <circle cx="103" cy="62" r="1.5" fill="#2ecc71" opacity="0.5">
+      {/* Status LEDs */}
+      <circle cx="55" cy="12" r="1.5" fill="#2ecc71" opacity="0.5">
         <animate attributeName="opacity" values="0.5;0.2;0.5" dur="2s" repeatCount="indefinite" />
       </circle>
-      <circle cx="243" cy="118" r="1.5" fill="#C9A84C" opacity="0.4">
-        <animate attributeName="opacity" values="0.4;0.15;0.4" dur="3s" repeatCount="indefinite" />
-      </circle>
-      <circle cx="175" cy="62" r="1" fill="#3498db" opacity="0.3">
-        <animate attributeName="opacity" values="0.3;0.1;0.3" dur="2.5s" repeatCount="indefinite" />
+      <circle cx="62" cy="12" r="1.5" fill="#C9A84C" opacity="0.4">
+        <animate attributeName="opacity" values="0.4;0.1;0.4" dur="3.5s" repeatCount="indefinite" />
       </circle>
 
-      {/* Small plant on desk corner */}
-      <g transform="translate(330, 195)">
-        <rect x="0" y="5" width="8" height="7" rx="1" fill="#1a2040" />
-        <path d="M 4,5 Q 2,0 4,-3 Q 6,0 4,5" fill="rgba(46,204,113,0.25)" />
-        <path d="M 4,4 Q 0,-1 2,-4" fill="none" stroke="rgba(46,204,113,0.2)" strokeWidth="0.5" />
-        <path d="M 4,4 Q 7,-1 6,-3" fill="none" stroke="rgba(46,204,113,0.15)" strokeWidth="0.5" />
-      </g>
+      {/* ── CASIER DOCUMENTS — intégré dans le mur gauche ── */}
+      <DocLocker
+        onFileContent={onFileContent}
+        onDocumentReady={onDocumentReady}
+        outputDoc={outputDoc}
+      />
 
-      {/* Ambient gold glow from bottom */}
-      <rect x="0" y="230" width="400" height="50" fill="url(#bc-gold-glow)" />
     </svg>
   )
 }

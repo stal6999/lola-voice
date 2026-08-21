@@ -9,7 +9,6 @@ import DocumentPanel from '@/components/DocumentPanel'
 import MSDosTerminal from '@/components/MSDosTerminal'
 import BigScreen from '@/components/BigScreen'
 import DocNotification from '@/components/DocNotification'
-
 type Message = { role: 'user' | 'assistant'; content: string }
 type MouthState = 'closed' | 'half' | 'open'
 type Expression = 'neutral' | 'listening' | 'thinking' | 'smiling'
@@ -346,7 +345,17 @@ export default function LolaPage() {
           display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
           paddingTop: '5%',
         }}>
-          <BatcaveScene width={Math.min(typeof window !== 'undefined' ? window.innerWidth : 400, 500)} audioActive={speaking} />
+          <BatcaveScene
+            width={Math.min(typeof window !== 'undefined' ? window.innerWidth : 400, 500)}
+            audioActive={speaking}
+            screenContent={bigScreenContent}
+            onFileContent={(content, filename) => {
+              sendMessage(`[Document reçu: ${filename}]\n\n${content.slice(0, 3000)}\n\nRésume ce document et dis-moi ce que tu en retiens.`)
+              setBigScreenContent(`📄 ${filename}\n\n${content.slice(0, 600)}...`)
+            }}
+            onDocumentReady={(name) => setDocNotification(`"${name}" assimilé — je suis prête.`)}
+            outputDoc={null}
+          />
           <CSSParticles count={18} />
         </div>
 
