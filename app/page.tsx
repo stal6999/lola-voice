@@ -32,8 +32,29 @@ export default function LolaPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
+  const audioUnlockedRef = useRef(false)
   const messagesRef = useRef<Message[]>([])
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const ttsQueueRef = useRef<string | null>(null)
+
+  // Débloquer l'audio au premier geste utilisateur (Chrome mobile exige ça)
+  function unlockAudio() {
+    if (audioUnlockedRef.current) return
+    if (!audioRef.current) {
+      const a = document.createElement('audio')
+      a.setAttribute('playsinline', '')
+      a.setAttribute('webkit-playsinline', '')
+      // Jouer un son silencieux pour débloquer
+      a.src = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA/+M4wAAAAAAAAAAAAEluZm8AAAAPAAAAAwAAAbAAqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV////////////////////////////////////////////AAAAAExhdmM1OC4xMwAAAAAAAAAAAAAAACQAAAAAAAAAAaC5CwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/+M4wAAAAANIAAAAAExBTUUzLjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV/+M4wDkAAANIAAAAAFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV'
+      a.volume = 0.01
+      a.play().then(() => {
+        audioUnlockedRef.current = true
+        a.pause()
+        a.volume = 1
+      }).catch(() => {})
+      audioRef.current = a
+    }
+  }
 
   useEffect(() => { messagesRef.current = messages }, [messages])
 
@@ -116,6 +137,7 @@ export default function LolaPage() {
   /* ── SEND MESSAGE ── */
   const sendMessage = useCallback(async (text: string) => {
     if (!text.trim()) return
+    unlockAudio() // Débloque l'audio au moment du geste utilisateur
     const userMsg: Message = { role: 'user', content: text }
     const history = [...messagesRef.current, userMsg]
     setMessages(history)
@@ -139,26 +161,26 @@ export default function LolaPage() {
     }
   }, [])
 
-  /* ── TTS — fiable mobile avec audio element persistant ── */
+  /* ── TTS — utilise l'audio déjà débloqué ── */
   async function playTTS(text: string) {
     setSpeaking(true)
     try {
       const res = await fetch('/api/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) })
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
-      if (audioRef.current) { audioRef.current.pause() }
 
-      // Réutiliser ou créer l'élément audio
+      // L'audio element existe déjà grâce à unlockAudio()
       if (!audioRef.current) {
         const a = document.createElement('audio')
         a.setAttribute('playsinline', '')
-        a.setAttribute('webkit-playsinline', '')
         document.body.appendChild(a)
         audioRef.current = a
       }
 
       const audio = audioRef.current
+      audio.pause()
       audio.src = url
+      audio.volume = 1
 
       // Lip-sync par timer
       let lipInterval: NodeJS.Timeout | null = null
@@ -185,12 +207,8 @@ export default function LolaPage() {
         setMouthState('closed')
       }
 
-      await audio.play().catch(() => {
-        setSpeaking(false)
-        setExpression('neutral')
-      })
-    } catch (e) {
-      console.error('TTS fetch error:', e)
+      audio.play()
+    } catch {
       setSpeaking(false)
       setExpression('neutral')
     }
@@ -203,7 +221,8 @@ export default function LolaPage() {
   }
 
   function startListening() {
-    if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; setSpeaking(false); setMouthState('closed') }
+    unlockAudio() // Débloque l'audio aussi quand on appuie sur le micro
+    if (audioRef.current) { audioRef.current.pause(); setSpeaking(false); setMouthState('closed') }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
