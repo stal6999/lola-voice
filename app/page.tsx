@@ -17,7 +17,7 @@ export default function LolaPage() {
   const [listening, setListening] = useState(false)
   const [liveTranscript, setLiveTranscript] = useState('')
   const [lastResponse, setLastResponse]     = useState('')
-  const [showPortal, setShowPortal]         = useState(true)
+  const [showPortal, setShowPortal]         = useState(false)
   const [mouthState, setMouthState]         = useState<MouthState>('closed')
   const [blinking, setBlinking]             = useState(false)
   const [expression, setExpression]         = useState<Expression>('neutral')
