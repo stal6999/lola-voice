@@ -139,19 +139,28 @@ export default function LolaPage() {
     }
   }, [])
 
-  /* ── TTS — simple et fiable ── */
+  /* ── TTS — fiable mobile avec audio element persistant ── */
   async function playTTS(text: string) {
     setSpeaking(true)
     try {
-      const res  = await fetch('/api/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) })
+      const res = await fetch('/api/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) })
       const blob = await res.blob()
-      const url  = URL.createObjectURL(blob)
-      if (audioRef.current) { audioRef.current.pause(); audioRef.current = null }
+      const url = URL.createObjectURL(blob)
+      if (audioRef.current) { audioRef.current.pause() }
 
-      const audio = new Audio(url)
-      audioRef.current = audio
+      // Réutiliser ou créer l'élément audio
+      if (!audioRef.current) {
+        const a = document.createElement('audio')
+        a.setAttribute('playsinline', '')
+        a.setAttribute('webkit-playsinline', '')
+        document.body.appendChild(a)
+        audioRef.current = a
+      }
 
-      // Lip-sync par timer (fiable sur mobile, pas de CORS/AudioContext)
+      const audio = audioRef.current
+      audio.src = url
+
+      // Lip-sync par timer
       let lipInterval: NodeJS.Timeout | null = null
 
       audio.onplay = () => {
@@ -168,21 +177,15 @@ export default function LolaPage() {
         setSpeaking(false)
         setExpression('neutral')
         setMouthState('closed')
-        audioRef.current = null
       }
-      audio.onerror = (e) => {
-        console.error('TTS audio error:', e)
+      audio.onerror = () => {
         if (lipInterval) clearInterval(lipInterval)
         setSpeaking(false)
         setExpression('neutral')
         setMouthState('closed')
-        audioRef.current = null
       }
 
-      // Mobile requires play() within user gesture context
-      // The fetch above is already within the gesture chain
-      await audio.play().catch((e) => {
-        console.error('Play blocked:', e)
+      await audio.play().catch(() => {
         setSpeaking(false)
         setExpression('neutral')
       })
