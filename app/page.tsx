@@ -1,53 +1,87 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
+import LolaAvatar from '@/components/LolaAvatar'
+import BatcaveScene from '@/components/BatcaveScene'
+import PortalEntry from '@/components/PortalEntry'
 
 type Message = { role: 'user' | 'assistant'; content: string }
+type MouthState = 'closed' | 'half' | 'open'
+type Expression = 'neutral' | 'listening' | 'thinking' | 'smiling'
 
 export default function LolaPage() {
   const [messages, setMessages]   = useState<Message[]>([])
-  const [input, setInput]         = useState('')
   const [loading, setLoading]     = useState(false)
   const [speaking, setSpeaking]   = useState(false)
   const [listening, setListening] = useState(false)
   const [liveTranscript, setLiveTranscript] = useState('')
-  const bottomRef = useRef<HTMLDivElement>(null)
+  const [lastResponse, setLastResponse]     = useState('')
+  const [showPortal, setShowPortal]         = useState(true)
+  const [mouthState, setMouthState]         = useState<MouthState>('closed')
+  const [blinking, setBlinking]             = useState(false)
+  const [expression, setExpression]         = useState<Expression>('neutral')
+  const [input, setInput]                   = useState('')
+  const [showChat, setShowChat]             = useState(false)
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const messagesRef = useRef<Message[]>([])
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const analyserRef = useRef<AnalyserNode | null>(null)
+  const animFrameRef = useRef<number | null>(null)
 
   useEffect(() => { messagesRef.current = messages }, [messages])
 
+  // Blink timer
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, liveTranscript])
+    function doBlink() {
+      setBlinking(true)
+      setTimeout(() => setBlinking(false), 150)
+    }
+    const interval = setInterval(() => {
+      if (Math.random() > 0.3) doBlink()
+    }, 3500)
+    return () => clearInterval(interval)
+  }, [])
 
-  /* ── ENVOI MESSAGE ── */
-  const sendMessage = useCallback(async (text: string, currentMessages?: Message[]) => {
+  // Lip sync listener
+  useEffect(() => {
+    function handler(e: Event) {
+      const detail = (e as CustomEvent).detail as MouthState
+      setMouthState(detail)
+    }
+    window.addEventListener('lola-mouth', handler)
+    return () => window.removeEventListener('lola-mouth', handler)
+  }, [])
+
+  /* ── SEND MESSAGE ── */
+  const sendMessage = useCallback(async (text: string) => {
     if (!text.trim()) return
     const userMsg: Message = { role: 'user', content: text }
-    const history = [...(currentMessages || messagesRef.current), userMsg]
+    const history = [...messagesRef.current, userMsg]
     setMessages(history)
     setInput('')
     setLiveTranscript('')
     setLoading(true)
+    setExpression('thinking')
 
     try {
       const res  = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: history }) })
       const data = await res.json()
       const lolaMsg: Message = { role: 'assistant', content: data.text }
-      const updated = [...history, lolaMsg]
-      setMessages(updated)
+      setMessages([...history, lolaMsg])
+      setLastResponse(data.text)
       setLoading(false)
+      setExpression('smiling')
       playTTS(data.text)
     } catch {
       setLoading(false)
+      setExpression('neutral')
     }
   }, [])
 
-  /* ── TTS ── */
+  /* ── TTS with lip-sync ── */
   async function playTTS(text: string) {
     setSpeaking(true)
     try {
@@ -55,34 +89,94 @@ export default function LolaPage() {
       const blob = await res.blob()
       const url  = URL.createObjectURL(blob)
       if (audioRef.current) { audioRef.current.pause(); audioRef.current = null }
+
       const audio = new Audio(url)
       audioRef.current = audio
-      audio.onended = () => { setSpeaking(false); audioRef.current = null }
-      audio.onerror = () => { setSpeaking(false); audioRef.current = null }
+
+      // Start lip-sync analysis
+      audio.onplay = () => startLipSync(audio)
+      audio.onended = () => {
+        setSpeaking(false)
+        setExpression('neutral')
+        setMouthState('closed')
+        stopLipSync()
+        audioRef.current = null
+      }
+      audio.onerror = () => {
+        setSpeaking(false)
+        setExpression('neutral')
+        stopLipSync()
+        audioRef.current = null
+      }
       audio.play()
     } catch {
       setSpeaking(false)
+      setExpression('neutral')
     }
   }
 
-  /* ── SPEECH RECOGNITION avec détection de silence ── */
-  function toggleListening() {
-    if (listening) {
-      stopListening()
-    } else {
-      startListening()
+  function startLipSync(audio: HTMLAudioElement) {
+    try {
+      const ctx = new AudioContext()
+      const analyser = ctx.createAnalyser()
+      analyser.fftSize = 256
+      analyser.smoothingTimeConstant = 0.7
+      analyserRef.current = analyser
+
+      const source = ctx.createMediaElementSource(audio)
+      source.connect(analyser)
+      analyser.connect(ctx.destination)
+
+      const dataArray = new Uint8Array(analyser.frequencyBinCount)
+
+      function analyze() {
+        if (!analyserRef.current) return
+        analyserRef.current.getByteFrequencyData(dataArray)
+        let sum = 0
+        for (let i = 4; i < 40 && i < dataArray.length; i++) sum += dataArray[i]
+        const avg = sum / 36
+
+        let state: MouthState = 'closed'
+        if (avg > 50) state = 'open'
+        else if (avg > 15) state = 'half'
+
+        setMouthState(state)
+        animFrameRef.current = requestAnimationFrame(analyze)
+      }
+      analyze()
+    } catch {
+      // Fallback animation
+      let t = 0
+      const interval = setInterval(() => {
+        t++
+        const states: MouthState[] = ['closed', 'half', 'open', 'half']
+        setMouthState(states[t % 4])
+      }, 120)
+      animFrameRef.current = interval as unknown as number
     }
+  }
+
+  function stopLipSync() {
+    if (animFrameRef.current) {
+      cancelAnimationFrame(animFrameRef.current)
+      animFrameRef.current = null
+    }
+    analyserRef.current = null
+    setMouthState('closed')
+  }
+
+  /* ── SPEECH RECOGNITION with auto-silence ── */
+  function toggleListening() {
+    if (listening) stopListening()
+    else startListening()
   }
 
   function startListening() {
-    if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; setSpeaking(false) }
+    if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; setSpeaking(false); stopLipSync() }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
-    if (!SR) {
-      alert('Ton navigateur ne supporte pas la reconnaissance vocale. Utilise Chrome ou Safari.')
-      return
-    }
+    if (!SR) { alert('Navigateur non supporté. Utilise Chrome ou Safari.'); return }
 
     const recognition = new SR()
     recognition.lang = 'fr-FR'
@@ -91,14 +185,12 @@ export default function LolaPage() {
 
     let finalTranscript = ''
     let hasSpoken = false
+    setExpression('listening')
 
     function resetSilenceTimer() {
       if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current)
       silenceTimerRef.current = setTimeout(() => {
-        // 1.5s de silence après avoir parlé → on envoie
-        if (hasSpoken && finalTranscript.trim()) {
-          recognition.stop()
-        }
+        if (hasSpoken && finalTranscript.trim()) recognition.stop()
       }, 1500)
     }
 
@@ -107,13 +199,8 @@ export default function LolaPage() {
       let interim = ''
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const t = event.results[i][0].transcript
-        if (event.results[i].isFinal) {
-          finalTranscript += t + ' '
-          hasSpoken = true
-        } else {
-          interim = t
-          hasSpoken = true
-        }
+        if (event.results[i].isFinal) { finalTranscript += t + ' '; hasSpoken = true }
+        else { interim = t; hasSpoken = true }
       }
       setLiveTranscript(finalTranscript + interim)
       resetSilenceTimer()
@@ -123,16 +210,14 @@ export default function LolaPage() {
       if (silenceTimerRef.current) { clearTimeout(silenceTimerRef.current); silenceTimerRef.current = null }
       setListening(false)
       const text = finalTranscript.trim()
-      if (text) {
-        sendMessage(text)
-      }
+      if (text) sendMessage(text)
+      else setExpression('neutral')
       setLiveTranscript('')
     }
 
     recognition.onerror = () => {
       if (silenceTimerRef.current) { clearTimeout(silenceTimerRef.current); silenceTimerRef.current = null }
-      setListening(false)
-      setLiveTranscript('')
+      setListening(false); setLiveTranscript(''); setExpression('neutral')
     }
 
     recognitionRef.current = recognition
@@ -146,218 +231,165 @@ export default function LolaPage() {
     setListening(false)
   }
 
+  // Portal
+  if (showPortal) {
+    return <PortalEntry onComplete={() => setShowPortal(false)} />
+  }
+
   return (
     <div style={{
-      minHeight: '100dvh',
+      position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
       background: '#0d1530', display: 'flex', flexDirection: 'column',
       fontFamily: '-apple-system, BlinkMacSystemFont, Inter, system-ui, sans-serif',
-      position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+      overflow: 'hidden',
     }}>
 
-      {/* ── HEADER ── */}
-      <header style={{
-        background: '#122050', borderBottom: '1px solid rgba(201,168,76,.2)',
-        padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0,
+      {/* ── SCENE: Batcave + Lola ── */}
+      <div style={{
+        flex: 1, position: 'relative', display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'flex-end',
+        overflow: 'hidden',
       }}>
-        <div style={{ position: 'relative', flexShrink: 0 }}>
-          <div style={{
-            width: 42, height: 42, borderRadius: '50%',
-            background: 'linear-gradient(135deg,#C9A84C,#E8C96A)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 18, fontWeight: 800, color: '#0d1530',
-          }}>L</div>
-          {(speaking || listening) && (
+        {/* Background scene */}
+        <div style={{
+          position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+          display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
+          paddingTop: '5%',
+        }}>
+          <BatcaveScene width={Math.min(typeof window !== 'undefined' ? window.innerWidth : 400, 500)} />
+        </div>
+
+        {/* Lola avatar — positioned over the desk */}
+        <div style={{
+          position: 'relative', zIndex: 10,
+          marginBottom: 0,
+          animation: 'lolaFloat 4s ease-in-out infinite',
+        }}>
+          <LolaAvatar
+            mouthState={mouthState}
+            blinking={blinking}
+            expression={expression}
+            width={Math.min(typeof window !== 'undefined' ? window.innerWidth * 0.55 : 220, 250)}
+          />
+        </div>
+
+        {/* Status indicator */}
+        <div style={{
+          position: 'absolute', top: 16, left: 16, right: 16,
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          zIndex: 20,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <div style={{
-              position: 'absolute', bottom: 1, right: 1, width: 10, height: 10,
-              borderRadius: '50%', background: listening ? '#e74c3c' : '#2ecc71',
-              border: '2px solid #122050', animation: 'pulse 1s infinite',
+              width: 8, height: 8, borderRadius: '50%',
+              background: listening ? '#e74c3c' : speaking ? '#2ecc71' : '#C9A84C',
+              animation: (listening || speaking) ? 'pulse 1s infinite' : 'none',
             }} />
-          )}
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontFamily: 'Georgia, serif', fontSize: 18, fontWeight: 700, color: '#C9A84C' }}>Lola</div>
-          <div style={{ fontSize: 11, color: '#8A9BB5' }}>
-            {listening ? '🎙 Je t\u2019écoute…' : speaking ? '🔊 Je parle…' : loading ? '⌛ Réflexion…' : '● Disponible'}
+            <span style={{ fontSize: 11, color: '#8A9BB5' }}>
+              {listening ? 'Je t\u2019écoute…' : speaking ? 'Lola parle…' : loading ? 'Réflexion…' : 'Lola'}
+            </span>
           </div>
-        </div>
-      </header>
-
-      {/* ── MESSAGES ── */}
-      <main style={{
-        flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch',
-        padding: '16px 12px', display: 'flex', flexDirection: 'column', gap: 12,
-      }}>
-
-        {messages.length === 0 && !listening && (
-          <div style={{ textAlign: 'center', marginTop: 40, padding: '0 16px' }}>
-            <div style={{ fontFamily: 'Georgia, serif', fontSize: 28, fontWeight: 800, color: '#C9A84C', marginBottom: 10 }}>
-              Bonjour Christophe.
-            </div>
-            <div style={{ fontSize: 14, color: '#8A9BB5', lineHeight: 1.7 }}>
-              Je suis Lola, ton assistante.<br />Appuie sur le micro et parle-moi.
-            </div>
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginTop: 24, flexWrap: 'wrap' }}>
-              {['Mon planning ?', 'Urgences Jérôme', 'Rédiger un mail'].map(s => (
-                <button key={s} onClick={() => sendMessage(s)}
-                  style={{
-                    background: 'rgba(201,168,76,.1)', border: '1px solid rgba(201,168,76,.3)',
-                    borderRadius: 16, padding: '8px 14px', color: '#E8C96A', fontSize: 12, cursor: 'pointer',
-                  }}>
-                  {s}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {messages.map((m, i) => (
-          <div key={i} style={{
-            display: 'flex', justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start',
-            gap: 8, alignItems: 'flex-end',
+          <button onClick={() => setShowChat(!showChat)} style={{
+            background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(201,168,76,0.2)',
+            borderRadius: 16, padding: '4px 12px', color: '#C9A84C', fontSize: 11, cursor: 'pointer',
           }}>
-            {m.role === 'assistant' && (
-              <div style={{
-                width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
-                background: 'linear-gradient(135deg,#C9A84C,#E8C96A)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 12, fontWeight: 800, color: '#0d1530',
-              }}>L</div>
-            )}
-            <div style={{
-              maxWidth: '80%', padding: '10px 14px',
-              borderRadius: m.role === 'user' ? '16px 16px 4px 16px' : '4px 16px 16px 16px',
-              background: m.role === 'user' ? 'linear-gradient(135deg,#C9A84C,#E8C96A)' : 'rgba(255,255,255,.06)',
-              border: m.role === 'assistant' ? '1px solid rgba(255,255,255,.08)' : 'none',
-              color: m.role === 'user' ? '#0d1530' : '#fff',
-              fontSize: 14, lineHeight: 1.55,
-              wordBreak: 'break-word' as const, textAlign: 'left' as const,
-            }}>
-              {m.content}
-            </div>
-            {m.role === 'user' && (
-              <div style={{
-                width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
-                background: '#1a2f6b',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 12, fontWeight: 700, color: '#C9A84C',
-              }}>C</div>
-            )}
-          </div>
-        ))}
-
-        {/* Live transcript */}
-        {listening && liveTranscript && (
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, alignItems: 'flex-end' }}>
-            <div style={{
-              maxWidth: '80%', padding: '10px 14px',
-              borderRadius: '16px 16px 4px 16px',
-              background: 'rgba(201,168,76,.2)', border: '1px dashed rgba(201,168,76,.5)',
-              color: '#E8C96A', fontSize: 14, lineHeight: 1.55, fontStyle: 'italic',
-              wordBreak: 'break-word' as const, textAlign: 'left' as const,
-            }}>
-              {liveTranscript}…
-            </div>
-            <div style={{
-              width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
-              background: '#1a2f6b',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 12, fontWeight: 700, color: '#C9A84C',
-            }}>C</div>
-          </div>
-        )}
-
-        {/* Listening indicator without text yet */}
-        {listening && !liveTranscript && (
-          <div style={{ textAlign: 'center', padding: '20px 0' }}>
-            <div style={{
-              display: 'inline-flex', gap: 4, alignItems: 'center',
-              background: 'rgba(231,76,60,.1)', border: '1px solid rgba(231,76,60,.3)',
-              borderRadius: 20, padding: '8px 16px',
-            }}>
-              <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#e74c3c', animation: 'pulse 0.8s infinite' }} />
-              <span style={{ fontSize: 13, color: '#e74c3c', marginLeft: 6 }}>Je t&apos;écoute… parle librement</span>
-            </div>
-          </div>
-        )}
-
-        {loading && (
-          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
-            <div style={{
-              width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
-              background: 'linear-gradient(135deg,#C9A84C,#E8C96A)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 12, fontWeight: 800, color: '#0d1530',
-            }}>L</div>
-            <div style={{
-              background: 'rgba(255,255,255,.06)', border: '1px solid rgba(255,255,255,.08)',
-              borderRadius: '4px 16px 16px 16px', padding: '12px 16px',
-            }}>
-              <div style={{ display: 'flex', gap: 5 }}>
-                {[0,1,2].map(i => (
-                  <div key={i} style={{
-                    width: 7, height: 7, borderRadius: '50%', background: '#C9A84C',
-                    opacity: 0.4, animation: `bounce 1s ${i*0.2}s infinite`,
-                  }} />
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-        <div ref={bottomRef} />
-      </main>
-
-      {/* ── INPUT ── */}
-      <footer style={{
-        background: '#122050', borderTop: '1px solid rgba(201,168,76,.15)',
-        padding: '10px 12px', paddingBottom: 'max(10px, env(safe-area-inset-bottom))',
-        flexShrink: 0,
-      }}>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
-
-          {/* Micro */}
-          <button onClick={toggleListening}
-            style={{
-              width: 44, height: 44, borderRadius: '50%', border: 'none', cursor: 'pointer', flexShrink: 0,
-              transition: 'all .2s',
-              background: listening ? '#e74c3c' : 'rgba(201,168,76,.15)',
-              color: listening ? '#fff' : '#C9A84C', fontSize: 18,
-              boxShadow: listening ? '0 0 16px rgba(231,76,60,.4)' : 'none',
-            }}>
-            {listening ? '⏹' : '🎙'}
-          </button>
-
-          {/* Texte */}
-          <textarea value={input} onChange={e => setInput(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(input) } }}
-            placeholder={listening ? 'Je t\u2019écoute…' : 'Écris à Lola…'}
-            rows={1}
-            disabled={listening}
-            style={{
-              flex: 1, background: 'rgba(255,255,255,.06)', border: '1px solid rgba(255,255,255,.12)',
-              borderRadius: 22, padding: '10px 16px',
-              color: '#fff', fontSize: 14, resize: 'none', outline: 'none',
-              lineHeight: 1.5, fontFamily: 'inherit',
-              opacity: listening ? 0.3 : 1,
-            }} />
-
-          {/* Envoyer */}
-          <button onClick={() => sendMessage(input)} disabled={!input.trim() || loading || listening}
-            style={{
-              width: 44, height: 44, borderRadius: '50%', border: 'none', cursor: 'pointer', flexShrink: 0,
-              transition: 'all .2s',
-              background: input.trim() && !listening ? 'linear-gradient(135deg,#C9A84C,#E8C96A)' : 'rgba(255,255,255,.08)',
-              color: input.trim() && !listening ? '#0d1530' : '#8A9BB5', fontSize: 18,
-            }}>
-            ➤
+            {showChat ? '✕' : '💬'}
           </button>
         </div>
+      </div>
+
+      {/* ── CHAT OVERLAY (toggle) ── */}
+      {showChat && (
+        <div style={{
+          position: 'absolute', top: 50, left: 8, right: 8, bottom: 90,
+          background: 'rgba(13,21,48,0.95)', borderRadius: 16,
+          border: '1px solid rgba(201,168,76,0.15)', zIndex: 30,
+          display: 'flex', flexDirection: 'column', overflow: 'hidden',
+        }}>
+          <div style={{ padding: '12px 16px', borderBottom: '1px solid rgba(201,168,76,0.1)', flexShrink: 0 }}>
+            <span style={{ fontFamily: 'Georgia, serif', fontSize: 14, color: '#C9A84C' }}>Conversation</span>
+          </div>
+          <div style={{ flex: 1, overflowY: 'auto', padding: '12px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {messages.map((m, i) => (
+              <div key={i} style={{
+                alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start',
+                maxWidth: '80%', padding: '8px 12px',
+                borderRadius: m.role === 'user' ? '14px 14px 4px 14px' : '4px 14px 14px 14px',
+                background: m.role === 'user' ? 'linear-gradient(135deg,#C9A84C,#E8C96A)' : 'rgba(255,255,255,.06)',
+                color: m.role === 'user' ? '#0d1530' : '#fff',
+                fontSize: 13, lineHeight: 1.5, textAlign: 'left' as const, wordBreak: 'break-word' as const,
+              }}>
+                {m.content}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── RESPONSE BUBBLE ── */}
+      <div style={{
+        flexShrink: 0, padding: '8px 16px', minHeight: 50,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        {(lastResponse || liveTranscript || loading) && (
+          <div style={{
+            background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(201,168,76,0.15)',
+            borderRadius: 16, padding: '10px 16px', maxWidth: '90%',
+            fontSize: 13, lineHeight: 1.5, textAlign: 'center' as const,
+            color: liveTranscript ? '#E8C96A' : '#fff',
+            fontStyle: liveTranscript ? 'italic' : 'normal',
+          }}>
+            {loading ? '⌛ Lola réfléchit…' : liveTranscript ? `"${liveTranscript}…"` : lastResponse}
+          </div>
+        )}
+      </div>
+
+      {/* ── INPUT BAR ── */}
+      <footer style={{
+        background: 'rgba(18,32,80,0.9)', borderTop: '1px solid rgba(201,168,76,0.1)',
+        padding: '10px 12px', paddingBottom: 'max(10px, env(safe-area-inset-bottom))',
+        flexShrink: 0, display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'center',
+      }}>
+        {/* Text input */}
+        <input value={input} onChange={e => setInput(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); sendMessage(input) } }}
+          placeholder="Écris à Lola…"
+          disabled={listening}
+          style={{
+            flex: 1, maxWidth: 280, background: 'rgba(255,255,255,.06)',
+            border: '1px solid rgba(255,255,255,.1)', borderRadius: 20,
+            padding: '10px 16px', color: '#fff', fontSize: 14, outline: 'none',
+            fontFamily: 'inherit', opacity: listening ? 0.3 : 1,
+          }} />
+
+        {/* Micro — central, bigger */}
+        <button onClick={toggleListening}
+          style={{
+            width: 56, height: 56, borderRadius: '50%', border: 'none', cursor: 'pointer',
+            background: listening ? '#e74c3c' : 'linear-gradient(135deg,#C9A84C,#E8C96A)',
+            color: listening ? '#fff' : '#0d1530', fontSize: 22, flexShrink: 0,
+            boxShadow: listening ? '0 0 20px rgba(231,76,60,.5)' : '0 0 15px rgba(201,168,76,.3)',
+            transition: 'all .2s',
+          }}>
+          {listening ? '⏹' : '🎙'}
+        </button>
+
+        {/* Send */}
+        <button onClick={() => sendMessage(input)} disabled={!input.trim() || loading || listening}
+          style={{
+            width: 40, height: 40, borderRadius: '50%', border: 'none', cursor: 'pointer', flexShrink: 0,
+            background: input.trim() ? 'rgba(201,168,76,.2)' : 'rgba(255,255,255,.05)',
+            color: input.trim() ? '#C9A84C' : '#8A9BB5', fontSize: 16,
+          }}>
+          ➤
+        </button>
       </footer>
 
       <style>{`
         @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
-        @keyframes bounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-4px)} }
-        textarea::placeholder { color: #8A9BB5; }
-        button:hover { opacity: .85; }
+        @keyframes lolaFloat { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-4px)} }
+        input::placeholder { color: #8A9BB5; }
+        button:active { transform: scale(0.95); }
         * { -webkit-tap-highlight-color: transparent; }
       `}</style>
     </div>
