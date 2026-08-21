@@ -28,6 +28,7 @@ export default function LolaPage() {
   const [eyeShiftX, setEyeShiftX]          = useState(0)
   const [eyeShiftY, setEyeShiftY]          = useState(0)
   const [microExpression, setMicroExpression] = useState<'none' | 'brow-raise' | 'slight-smile' | 'glance-screen'>('none')
+  const [conversationMode, setConversationMode] = useState(false) // Mode conversation continue
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null)
@@ -199,6 +200,10 @@ export default function LolaPage() {
         setSpeaking(false)
         setExpression('neutral')
         setMouthState('closed')
+        // Mode conversation continue → réécoute automatiquement
+        if (conversationMode) {
+          setTimeout(() => startListening(), 300)
+        }
       }
       audio.onerror = () => {
         if (lipInterval) clearInterval(lipInterval)
@@ -215,9 +220,17 @@ export default function LolaPage() {
   }
 
   /* ── SPEECH RECOGNITION with auto-silence ── */
-  function toggleListening() {
-    if (listening) stopListening()
-    else startListening()
+  function toggleConversation() {
+    if (conversationMode) {
+      // Arrêter la conversation
+      setConversationMode(false)
+      stopListening()
+      if (audioRef.current) { audioRef.current.pause(); setSpeaking(false); setMouthState('closed') }
+    } else {
+      // Lancer la conversation continue
+      setConversationMode(true)
+      startListening()
+    }
   }
 
   function startListening() {
@@ -342,7 +355,7 @@ export default function LolaPage() {
               animation: (listening || speaking) ? 'pulse 1s infinite' : 'none',
             }} />
             <span style={{ fontSize: 11, color: '#8A9BB5' }}>
-              {listening ? 'Je t\u2019écoute…' : speaking ? 'Lola parle…' : loading ? 'Réflexion…' : 'Lola'}
+              {conversationMode ? (listening ? '🎙 Je t\u2019écoute…' : speaking ? '🔊 Lola parle…' : loading ? '⌛ Réflexion…' : '🔄 En conversation') : 'Lola'}
             </span>
           </div>
           <button onClick={() => setShowChat(!showChat)} style={{
@@ -419,15 +432,16 @@ export default function LolaPage() {
           }} />
 
         {/* Micro — central, bigger */}
-        <button onClick={toggleListening}
+        <button onClick={toggleConversation}
           style={{
             width: 56, height: 56, borderRadius: '50%', border: 'none', cursor: 'pointer',
-            background: listening ? '#e74c3c' : 'linear-gradient(135deg,#C9A84C,#E8C96A)',
-            color: listening ? '#fff' : '#0d1530', fontSize: 22, flexShrink: 0,
-            boxShadow: listening ? '0 0 20px rgba(231,76,60,.5)' : '0 0 15px rgba(201,168,76,.3)',
+            background: conversationMode ? '#e74c3c' : 'linear-gradient(135deg,#C9A84C,#E8C96A)',
+            color: conversationMode ? '#fff' : '#0d1530', fontSize: 22, flexShrink: 0,
+            boxShadow: conversationMode ? '0 0 20px rgba(231,76,60,.5)' : '0 0 15px rgba(201,168,76,.3)',
             transition: 'all .2s',
+            animation: conversationMode ? 'recPulse 1.5s infinite' : 'none',
           }}>
-          {listening ? '⏹' : '🎙'}
+          {conversationMode ? '⏹' : '🎙'}
         </button>
 
         {/* Send */}
