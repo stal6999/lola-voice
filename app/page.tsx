@@ -22,6 +22,7 @@ export default function LolaPage() {
   const [expression, setExpression]         = useState<Expression>('neutral')
   const [input, setInput]                   = useState('')
   const [showChat, setShowChat]             = useState(false)
+  const [breathPhase, setBreathPhase]       = useState(0)
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null)
@@ -43,6 +44,19 @@ export default function LolaPage() {
       if (Math.random() > 0.3) doBlink()
     }, 3500)
     return () => clearInterval(interval)
+  }, [])
+
+  // Breathing cycle
+  useEffect(() => {
+    let frame: number
+    let start = Date.now()
+    function animate() {
+      const elapsed = (Date.now() - start) / 4000 // 4s cycle
+      setBreathPhase(elapsed % 1)
+      frame = requestAnimationFrame(animate)
+    }
+    frame = requestAnimationFrame(animate)
+    return () => cancelAnimationFrame(frame)
   }, [])
 
   // Lip sync listener
@@ -256,7 +270,7 @@ export default function LolaPage() {
           display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
           paddingTop: '5%',
         }}>
-          <BatcaveScene width={Math.min(typeof window !== 'undefined' ? window.innerWidth : 400, 500)} />
+          <BatcaveScene width={Math.min(typeof window !== 'undefined' ? window.innerWidth : 400, 500)} audioActive={speaking} />
         </div>
 
         {/* Lola avatar — positioned over the desk */}
@@ -269,6 +283,7 @@ export default function LolaPage() {
             mouthState={mouthState}
             blinking={blinking}
             expression={expression}
+            breathPhase={breathPhase}
             width={Math.min(typeof window !== 'undefined' ? window.innerWidth * 0.55 : 220, 250)}
           />
         </div>
