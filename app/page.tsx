@@ -24,6 +24,10 @@ export default function LolaPage() {
   const [input, setInput]                   = useState('')
   const [showChat, setShowChat]             = useState(false)
   const [breathPhase, setBreathPhase]       = useState(0)
+  const [headTiltX, setHeadTiltX]           = useState(0)
+  const [eyeShiftX, setEyeShiftX]          = useState(0)
+  const [eyeShiftY, setEyeShiftY]          = useState(0)
+  const [microExpression, setMicroExpression] = useState<'none' | 'brow-raise' | 'slight-smile' | 'glance-screen'>('none')
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null)
@@ -33,30 +37,71 @@ export default function LolaPage() {
 
   useEffect(() => { messagesRef.current = messages }, [messages])
 
-  // Blink timer
+  // Blink timer — naturel avec double-blink occasionnel
   useEffect(() => {
     function doBlink() {
       setBlinking(true)
       setTimeout(() => setBlinking(false), 150)
+      // 20% de chance de double-blink
+      if (Math.random() < 0.2) {
+        setTimeout(() => {
+          setBlinking(true)
+          setTimeout(() => setBlinking(false), 120)
+        }, 250)
+      }
     }
     const interval = setInterval(() => {
-      if (Math.random() > 0.3) doBlink()
-    }, 3500)
+      if (Math.random() > 0.25) doBlink()
+    }, 3000 + Math.random() * 2000)
     return () => clearInterval(interval)
   }, [])
 
   // Breathing cycle
   useEffect(() => {
     let frame: number
-    let start = Date.now()
+    const start = Date.now()
     function animate() {
-      const elapsed = (Date.now() - start) / 4000 // 4s cycle
+      const elapsed = (Date.now() - start) / 4000
       setBreathPhase(elapsed % 1)
       frame = requestAnimationFrame(animate)
     }
     frame = requestAnimationFrame(animate)
     return () => cancelAnimationFrame(frame)
   }, [])
+
+  // Micro-comportements humains — regarde ses écrans, lève un sourcil, petit sourire
+  useEffect(() => {
+    const interval = setInterval(() => {
+      // Si elle ne parle pas et n'écoute pas → petits gestes idle
+      if (!speaking && !listening && !loading) {
+        const rand = Math.random()
+        if (rand < 0.25) {
+          // Regarde un de ses écrans
+          setEyeShiftX(-2 + Math.random() * 4)
+          setEyeShiftY(-1 + Math.random() * 2)
+          setHeadTiltX(-1.5 + Math.random() * 3)
+          setTimeout(() => { setEyeShiftX(0); setEyeShiftY(0); setHeadTiltX(0) }, 1500 + Math.random() * 1000)
+        } else if (rand < 0.35) {
+          // Lève un sourcil
+          setMicroExpression('brow-raise')
+          setTimeout(() => setMicroExpression('none'), 800)
+        } else if (rand < 0.45) {
+          // Petit sourire
+          setMicroExpression('slight-smile')
+          setTimeout(() => setMicroExpression('none'), 1200)
+        } else if (rand < 0.55) {
+          // Regarde vers ses écrans puis revient
+          setMicroExpression('glance-screen')
+          setEyeShiftX(-3)
+          setHeadTiltX(-2)
+          setTimeout(() => {
+            setEyeShiftX(0); setHeadTiltX(0); setMicroExpression('none')
+          }, 2000)
+        }
+      }
+    }, 4000 + Math.random() * 3000)
+    return () => clearInterval(interval)
+  }, [speaking, listening, loading])
 
   // Lip sync listener
   useEffect(() => {
@@ -254,6 +299,10 @@ export default function LolaPage() {
             blinking={blinking}
             expression={expression}
             breathPhase={breathPhase}
+            headTiltX={headTiltX}
+            eyeShiftX={eyeShiftX}
+            eyeShiftY={eyeShiftY}
+            microExpression={microExpression}
             width={Math.min(typeof window !== 'undefined' ? window.innerWidth * 0.55 : 220, 250)}
           />
         </div>

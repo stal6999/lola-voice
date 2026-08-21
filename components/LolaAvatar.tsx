@@ -7,10 +7,14 @@ interface LolaAvatarProps {
   blinking: boolean
   expression: 'neutral' | 'listening' | 'thinking' | 'smiling'
   width?: number
-  breathPhase?: number // 0-1 for breathing animation
+  breathPhase?: number
+  headTiltX?: number
+  eyeShiftX?: number
+  eyeShiftY?: number
+  microExpression?: 'none' | 'brow-raise' | 'slight-smile' | 'glance-screen'
 }
 
-export default function LolaAvatar({ mouthState, blinking, expression, width = 280, breathPhase = 0 }: LolaAvatarProps) {
+export default function LolaAvatar({ mouthState, blinking, expression, width = 280, breathPhase = 0, headTiltX = 0, eyeShiftX = 0, eyeShiftY = 0, microExpression = 'none' }: LolaAvatarProps) {
   const h = width * 1.6
 
   // Breathing offset
@@ -20,17 +24,24 @@ export default function LolaAvatar({ mouthState, blinking, expression, width = 2
   // Eye states
   const eyeH = blinking ? 0.8 : expression === 'listening' ? 14 : 12
   const eyeRY = blinking ? 0.4 : expression === 'listening' ? 7 : 6
-  const pupilShift = expression === 'thinking' ? -3 : 0
+  const pupilShift = (expression === 'thinking' ? -3 : 0) + eyeShiftX
+  const pupilShiftY = eyeShiftY
 
   // Mouth paths with more detail
   const mouthPaths: Record<string, string> = {
-    closed: 'M 88,178 Q 94,182 100,183 Q 106,182 112,178',
+    closed: microExpression === 'slight-smile'
+      ? 'M 86,177 Q 94,183 100,184 Q 106,183 114,177'
+      : 'M 88,178 Q 94,182 100,183 Q 106,182 112,178',
     half: 'M 85,177 Q 93,183 100,185 Q 107,183 115,177 Q 107,181 100,182 Q 93,181 85,177',
     open: 'M 83,175 Q 92,190 100,193 Q 108,190 117,175 Q 108,185 100,187 Q 92,185 83,175',
   }
 
-  // Head tilt based on expression
-  const headTilt = expression === 'listening' ? 2 : expression === 'thinking' ? -3 : 0
+  // Head tilt — combines expression + micro-movements
+  const headTilt = (expression === 'listening' ? 2 : expression === 'thinking' ? -3 : 0) + headTiltX
+
+  // Eyebrow adjustment for micro-expressions
+  const browExtraLeft = microExpression === 'brow-raise' ? -2.5 : 0
+  const browExtraRight = 0
 
   return (
     <svg viewBox="0 0 200 320" width={width} height={h} xmlns="http://www.w3.org/2000/svg"
@@ -235,9 +246,9 @@ export default function LolaAvatar({ mouthState, blinking, expression, width = 2
 
         {/* Eyebrows — natural arch */}
         <g transform={`translate(0, ${expression === 'listening' ? -2 : expression === 'thinking' ? -1 : 0})`}>
-          <path d="M 67,116 Q 73,111 80,112 Q 85,113 90,115"
+          <path d={`M 67,${116 + browExtraLeft} Q 73,${111 + browExtraLeft} 80,${112 + browExtraLeft} Q 85,${113 + browExtraLeft} 90,${115 + browExtraLeft}`}
             fill="none" stroke="#4a3728" strokeWidth="2" strokeLinecap="round" />
-          <path d="M 110,115 Q 115,113 120,112 Q 127,111 133,116"
+          <path d={`M 110,${115 + browExtraRight} Q 115,${113 + browExtraRight} 120,${112 + browExtraRight} Q 127,${111 + browExtraRight} 133,${116 + browExtraRight}`}
             fill="none" stroke="#4a3728" strokeWidth="2" strokeLinecap="round" />
           {/* Brow fill for volume */}
           <path d="M 68,117 Q 73,112 80,113 Q 85,114 89,116 Q 85,115 80,114 Q 73,113 68,117 Z"
@@ -306,8 +317,8 @@ export default function LolaAvatar({ mouthState, blinking, expression, width = 2
             <path d="M 109,135 Q 120,137 131,135" fill="none" stroke="#4a3728" strokeWidth="1.5" strokeLinecap="round" />
           ) : (
             <>
-              <ellipse cx={120 + pupilShift * 0.5} cy="135" rx="6.5" ry="6.5" fill="url(#la-iris)" />
-              <ellipse cx={120 + pupilShift * 0.5} cy="135" rx="6.5" ry="6.5" fill="url(#la-iris-ring)" />
+              <ellipse cx={120 + pupilShift * 0.5} cy={135 + pupilShiftY} rx="6.5" ry="6.5" fill="url(#la-iris)" />
+              <ellipse cx={120 + pupilShift * 0.5} cy={135 + pupilShiftY} rx="6.5" ry="6.5" fill="url(#la-iris-ring)" />
               {[0,1,2,3,4,5].map(i => {
                 const angle = (i / 6) * Math.PI * 2
                 const ix = (120 + pupilShift * 0.5) + Math.cos(angle) * 2.5
@@ -316,7 +327,7 @@ export default function LolaAvatar({ mouthState, blinking, expression, width = 2
                 const oy = 135 + Math.sin(angle) * 5.5
                 return <line key={`ir${i}`} x1={ix} y1={iy} x2={ox} y2={oy} stroke="rgba(180,140,60,0.15)" strokeWidth="0.3" />
               })}
-              <circle cx={120 + pupilShift * 0.5} cy="135" r="3.2" fill="#1a1408" />
+              <circle cx={120 + pupilShift * 0.5} cy={135 + pupilShiftY} r="3.2" fill="#1a1408" />
               <circle cx={122 + pupilShift * 0.5} cy="132" r="1.8" fill="white" opacity="0.9" />
               <circle cx={118 + pupilShift * 0.5} cy="137" r="0.8" fill="white" opacity="0.4" />
               <rect x={117 + pupilShift * 0.5} y="133" width="2" height="1" rx="0.3" fill="rgba(100,150,220,0.15)" />
