@@ -15,6 +15,133 @@
 body {
   background: var(--navy);
   color: var(--white);
-  font-family: 'Inter', system-ui, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Inter', system-ui, sans-serif;
   min-height: 100vh;
+  overflow: hidden;
+}
+
+/* ── GLASSMORPHISM ── */
+.glass {
+  background: rgba(13, 21, 48, 0.7);
+  backdrop-filter: blur(20px) saturate(1.2);
+  -webkit-backdrop-filter: blur(20px) saturate(1.2);
+  border: 1px solid rgba(201, 168, 76, 0.12);
+  border-radius: 16px;
+}
+
+.glass-light {
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+}
+
+/* ── ANIMATIONS ORGANIQUES ── */
+
+/* Breathing */
+@keyframes breathing {
+  0%, 100% { transform: scaleY(1) translateY(0); }
+  40% { transform: scaleY(1.008) translateY(-1.2px); }
+  60% { transform: scaleY(1.012) translateY(-1.8px); }
+}
+
+/* Idle sway */
+@keyframes idleSway {
+  0%, 100% { transform: rotate(0deg) translateX(0); }
+  25% { transform: rotate(0.3deg) translateX(0.8px); }
+  75% { transform: rotate(-0.25deg) translateX(-0.6px); }
+}
+
+/* Head micro-movement */
+@keyframes headMicro {
+  0%, 100% { transform: rotate(0deg) translateY(0); }
+  20% { transform: rotate(0.4deg) translateY(-0.3px); }
+  40% { transform: rotate(-0.15deg) translateY(0.2px); }
+  60% { transform: rotate(0.2deg) translateY(-0.2px); }
+  80% { transform: rotate(-0.35deg) translateY(0.15px); }
+}
+
+/* Hair physics */
+@keyframes hairFlowPrimary {
+  0%, 100% { transform: rotate(0deg) skewX(0deg); }
+  30% { transform: rotate(1deg) skewX(0.5deg); }
+  70% { transform: rotate(-0.8deg) skewX(-0.3deg); }
+}
+
+@keyframes hairFlowSecondary {
+  0%, 100% { transform: rotate(0deg) translateX(0); }
+  35% { transform: rotate(1.5deg) translateX(1.5px); }
+  65% { transform: rotate(-1.2deg) translateX(-1px); }
+}
+
+@keyframes hairTips {
+  0%, 100% { transform: rotate(0deg) scaleX(1); }
+  25% { transform: rotate(2deg) scaleX(1.01); }
+  75% { transform: rotate(-1.8deg) scaleX(0.99); }
+}
+
+/* Float animation for avatar */
+@keyframes lolaFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+
+/* Pulse */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* Bounce for loading dots */
+@keyframes bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+/* Glow pulse for micro button */
+@keyframes glowPulse {
+  0%, 100% { box-shadow: 0 0 15px rgba(201,168,76,0.3); }
+  50% { box-shadow: 0 0 25px rgba(201,168,76,0.5), 0 0 50px rgba(201,168,76,0.15); }
+}
+
+/* Recording pulse */
+@keyframes recPulse {
+  0%, 100% { box-shadow: 0 0 10px rgba(231,76,60,0.3); }
+  50% { box-shadow: 0 0 25px rgba(231,76,60,0.6), 0 0 50px rgba(231,76,60,0.2); }
+}
+
+/* Twinkle for stars */
+@keyframes twinkle {
+  0%, 100% { opacity: 0.1; }
+  50% { opacity: 0.5; }
+}
+
+/* Screen scan line */
+@keyframes scanline {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100%); }
+}
+
+/* ── UI TOUCHES ── */
+textarea::placeholder, input::placeholder { color: var(--gray); }
+button { cursor: pointer; }
+button:active { transform: scale(0.95); }
+* { -webkit-tap-highlight-color: transparent; }
+
+/* Scrollbar styling */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(201,168,76,0.2); border-radius: 2px; }
+
+/* Selection */
+::selection { background: rgba(201,168,76,0.3); color: white; }
+
+/* Reduce motion preference */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

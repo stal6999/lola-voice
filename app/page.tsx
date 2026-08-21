@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import LolaAvatar from '@/components/LolaAvatar'
 import BatcaveScene from '@/components/BatcaveScene'
 import PortalEntry from '@/components/PortalEntry'
+import CSSParticles from '@/components/CSSParticles'
 
 type Message = { role: 'user' | 'assistant'; content: string }
 type MouthState = 'closed' | 'half' | 'open'
@@ -271,6 +272,7 @@ export default function LolaPage() {
           paddingTop: '5%',
         }}>
           <BatcaveScene width={Math.min(typeof window !== 'undefined' ? window.innerWidth : 400, 500)} audioActive={speaking} />
+          <CSSParticles count={18} />
         </div>
 
         {/* Lola avatar — positioned over the desk */}
