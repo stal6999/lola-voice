@@ -30,8 +30,6 @@ export default function LolaPage() {
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const messagesRef = useRef<Message[]>([])
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null)
-  const analyserRef = useRef<AnalyserNode | null>(null)
-  const animFrameRef = useRef<number | null>(null)
 
   useEffect(() => { messagesRef.current = messages }, [messages])
 
@@ -96,7 +94,7 @@ export default function LolaPage() {
     }
   }, [])
 
-  /* ── TTS with lip-sync ── */
+  /* ── TTS — simple et fiable ── */
   async function playTTS(text: string) {
     setSpeaking(true)
     try {
@@ -108,76 +106,46 @@ export default function LolaPage() {
       const audio = new Audio(url)
       audioRef.current = audio
 
-      // Start lip-sync analysis
-      audio.onplay = () => startLipSync(audio)
+      // Lip-sync par timer (fiable sur mobile, pas de CORS/AudioContext)
+      let lipInterval: NodeJS.Timeout | null = null
+
+      audio.onplay = () => {
+        let frame = 0
+        lipInterval = setInterval(() => {
+          frame++
+          const states: MouthState[] = ['closed', 'half', 'open', 'half']
+          setMouthState(states[frame % 4])
+        }, 120)
+      }
+
       audio.onended = () => {
+        if (lipInterval) clearInterval(lipInterval)
         setSpeaking(false)
         setExpression('neutral')
         setMouthState('closed')
-        stopLipSync()
         audioRef.current = null
       }
-      audio.onerror = () => {
+      audio.onerror = (e) => {
+        console.error('TTS audio error:', e)
+        if (lipInterval) clearInterval(lipInterval)
         setSpeaking(false)
         setExpression('neutral')
-        stopLipSync()
+        setMouthState('closed')
         audioRef.current = null
       }
-      audio.play()
-    } catch {
+
+      // Mobile requires play() within user gesture context
+      // The fetch above is already within the gesture chain
+      await audio.play().catch((e) => {
+        console.error('Play blocked:', e)
+        setSpeaking(false)
+        setExpression('neutral')
+      })
+    } catch (e) {
+      console.error('TTS fetch error:', e)
       setSpeaking(false)
       setExpression('neutral')
     }
-  }
-
-  function startLipSync(audio: HTMLAudioElement) {
-    try {
-      const ctx = new AudioContext()
-      const analyser = ctx.createAnalyser()
-      analyser.fftSize = 256
-      analyser.smoothingTimeConstant = 0.7
-      analyserRef.current = analyser
-
-      const source = ctx.createMediaElementSource(audio)
-      source.connect(analyser)
-      analyser.connect(ctx.destination)
-
-      const dataArray = new Uint8Array(analyser.frequencyBinCount)
-
-      function analyze() {
-        if (!analyserRef.current) return
-        analyserRef.current.getByteFrequencyData(dataArray)
-        let sum = 0
-        for (let i = 4; i < 40 && i < dataArray.length; i++) sum += dataArray[i]
-        const avg = sum / 36
-
-        let state: MouthState = 'closed'
-        if (avg > 50) state = 'open'
-        else if (avg > 15) state = 'half'
-
-        setMouthState(state)
-        animFrameRef.current = requestAnimationFrame(analyze)
-      }
-      analyze()
-    } catch {
-      // Fallback animation
-      let t = 0
-      const interval = setInterval(() => {
-        t++
-        const states: MouthState[] = ['closed', 'half', 'open', 'half']
-        setMouthState(states[t % 4])
-      }, 120)
-      animFrameRef.current = interval as unknown as number
-    }
-  }
-
-  function stopLipSync() {
-    if (animFrameRef.current) {
-      cancelAnimationFrame(animFrameRef.current)
-      animFrameRef.current = null
-    }
-    analyserRef.current = null
-    setMouthState('closed')
   }
 
   /* ── SPEECH RECOGNITION with auto-silence ── */
@@ -187,7 +155,7 @@ export default function LolaPage() {
   }
 
   function startListening() {
-    if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; setSpeaking(false); stopLipSync() }
+    if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; setSpeaking(false); setMouthState('closed') }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
