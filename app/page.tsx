@@ -5,6 +5,10 @@ import LolaAvatar from '@/components/LolaAvatar'
 import BatcaveScene from '@/components/BatcaveScene'
 import PortalEntry from '@/components/PortalEntry'
 import CSSParticles from '@/components/CSSParticles'
+import DocumentPanel from '@/components/DocumentPanel'
+import MSDosTerminal from '@/components/MSDosTerminal'
+import BigScreen from '@/components/BigScreen'
+import DocNotification from '@/components/DocNotification'
 
 type Message = { role: 'user' | 'assistant'; content: string }
 type MouthState = 'closed' | 'half' | 'open'
@@ -28,8 +32,12 @@ export default function LolaPage() {
   const [eyeShiftX, setEyeShiftX]          = useState(0)
   const [eyeShiftY, setEyeShiftY]          = useState(0)
   const [microExpression, setMicroExpression] = useState<'none' | 'brow-raise' | 'slight-smile' | 'glance-screen'>('none')
-  const [conversationMode, setConversationMode] = useState(false) // Mode conversation continue
-  const [muted, setMuted] = useState(false) // Micro coupé temporairement
+  const [conversationMode, setConversationMode] = useState(false)
+  const [muted, setMuted] = useState(false)
+  const [showDocs, setShowDocs]               = useState(false)
+  const [bigScreenContent, setBigScreenContent] = useState<string | null>(null)
+  const [bigScreenVisible, setBigScreenVisible] = useState(false)
+  const [docNotification, setDocNotification]   = useState<string | null>(null)
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null)
@@ -488,8 +496,71 @@ export default function LolaPage() {
         </button>
       </footer>
 
+      {/* ── DOCUMENTS PANEL ── */}
+      <DocumentPanel
+        visible={showDocs}
+        onClose={() => setShowDocs(false)}
+        onDocumentReady={(doc) => {
+          setDocNotification(`"${doc.name}" est prêt — je l'ai assimilé.`)
+        }}
+        onFileContent={(content, filename) => {
+          // Envoyer le contenu du doc dans le contexte de Lola
+          sendMessage(`[Document reçu: ${filename}]\n\n${content.slice(0, 3000)}\n\nRésume ce document et dis-moi ce que tu en retiens.`)
+          setBigScreenContent(`📄 ${filename}\n\n${content.slice(0, 800)}...`)
+          setBigScreenVisible(true)
+        }}
+      />
+
+      {/* ── GRAND ÉCRAN ── */}
+      <BigScreen
+        visible={bigScreenVisible}
+        content={bigScreenContent}
+        type={bigScreenContent ? 'text' : 'none'}
+      />
+
+      {/* ── TERMINAL MS-DOS ── */}
+      <MSDosTerminal visible={loading} processing={loading} taskName="Traitement requête" />
+
+      {/* ── NOTIFICATION DOC ── */}
+      <DocNotification message={docNotification} onDismiss={() => setDocNotification(null)} />
+
+      {/* ── BOUTON DOCS (toolbar) ── */}
+      <button onClick={() => setShowDocs(!showDocs)} style={{
+        position: 'fixed', right: showDocs ? 292 : 12, top: '50%',
+        transform: 'translateY(-50%)',
+        width: 36, height: 36, borderRadius: '50%', border: 'none', cursor: 'pointer',
+        background: showDocs ? 'rgba(201,168,76,0.3)' : 'rgba(255,255,255,0.06)',
+        color: '#C9A84C', fontSize: 16, zIndex: 55,
+        transition: 'all 0.3s',
+        boxShadow: '0 2px 12px rgba(0,0,0,0.3)',
+      }}>📁</button>
+
+      {/* ── BOUTON GRAND ÉCRAN (toggle) ── */}
+      {bigScreenVisible && (
+        <button onClick={() => setBigScreenVisible(false)} style={{
+          position: 'fixed', top: 8, left: '50%', transform: 'translateX(-50%)',
+          background: 'rgba(8,14,32,0.9)', border: '1px solid rgba(201,168,76,0.2)',
+          borderRadius: 16, padding: '4px 14px', color: '#8A9BB5', fontSize: 11, cursor: 'pointer',
+          zIndex: 20,
+        }}>Fermer l&apos;écran ✕</button>
+      )}
+
+      {/* ── BOUTON OUVRIR GRAND ÉCRAN ── */}
+      {lastResponse && !bigScreenVisible && (
+        <button onClick={() => {
+          setBigScreenContent(lastResponse)
+          setBigScreenVisible(true)
+        }} style={{
+          position: 'fixed', top: 60, left: '50%', transform: 'translateX(-50%)',
+          background: 'rgba(201,168,76,0.1)', border: '1px solid rgba(201,168,76,0.2)',
+          borderRadius: 16, padding: '4px 14px', color: '#C9A84C', fontSize: 11, cursor: 'pointer',
+          zIndex: 20,
+        }}>🖥 Afficher sur grand écran</button>
+      )}
+
       <style>{`
         @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+        @keyframes recPulse { 0%,100%{box-shadow:0 0 10px rgba(231,76,60,.3)} 50%{box-shadow:0 0 25px rgba(231,76,60,.6)} }
         @keyframes lolaFloat { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-4px)} }
         input::placeholder { color: #8A9BB5; }
         button:active { transform: scale(0.95); }
