@@ -43,6 +43,9 @@ export default function LolaPage() {
   const messagesRef = useRef<Message[]>([])
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+  // Refs pour éviter stale closures dans les callbacks audio
+  const conversationModeRef = useRef(false)
+  const mutedRef = useRef(false)
 
   useEffect(() => {
     setWinW(window.innerWidth); setWinH(window.innerHeight)
@@ -52,6 +55,8 @@ export default function LolaPage() {
   }, [])
 
   useEffect(() => { messagesRef.current = messages }, [messages])
+  useEffect(() => { conversationModeRef.current = conversationMode }, [conversationMode])
+  useEffect(() => { mutedRef.current = muted }, [muted])
 
   // Natural blink
   useEffect(() => {
@@ -145,7 +150,8 @@ export default function LolaPage() {
       audio.onplay = () => { let f = 0; lip = setInterval(() => { f++; setMouthState((['closed','half','open','half'] as MouthState[])[f%4]) }, 115) }
       audio.onended = () => {
         if (lip) clearInterval(lip); setSpeaking(false); setExpression('neutral'); setMouthState('closed')
-        if (conversationMode && !muted) setTimeout(() => startListening(), 350)
+        // Utiliser les refs pour éviter stale closures
+        if (conversationModeRef.current && !mutedRef.current) setTimeout(() => startListening(), 350)
       }
       audio.onerror = () => { if (lip) clearInterval(lip); setSpeaking(false); setExpression('neutral'); setMouthState('closed') }
       audio.play()
@@ -219,33 +225,33 @@ export default function LolaPage() {
     setShowDocDrop(false)
   }
 
-  // Lola position — she stands ON the floor
-  // LolaHome SVG: floor starts at y=620/700 = 88.5% of height
-  const floorPct = 0.885
-  const avatarW = Math.min(winW * 0.48, 195)
+  // Lola position — pieds sur le sol, pas de lévitation
+  const avatarW = Math.min(winW * 0.5, 200)
   const avatarH = avatarW * 2.4
-  const floorY = winH * floorPct
-  const avatarBottom = floorY // feet on floor
+  // LolaHome: sol à y=620/700 = 88.5% — ajusté pour que les pieds touchent
+  const floorY = winH * 0.87
+  const lolaTop = floorY - avatarH + 10 // +10 pour que les pieds soient légèrement dans le sol
 
-  // Emotion for crystals
+  // Emotion pour le décor
   const lolaEmotion = speaking ? 'excited' : listening ? 'listening' : loading ? 'thinking' : expression === 'smiling' ? 'happy' : 'neutral'
 
   return (
-    <div style={{ position: 'fixed', inset: 0, overflow: 'hidden', background: '#060310' }}>
+    <div style={{ position: 'fixed', inset: 0, overflow: 'hidden', background: '#060310', touchAction: 'none' }}>
 
       {/* ── DÉCOR PLEIN ÉCRAN ── */}
       <LolaHome width={winW} height={winH} screenContent={screenContent}
         audioActive={speaking} lolaEmotion={lolaEmotion} />
 
-      {/* ── LOLA — debout sur le sol ── */}
+      {/* ── LOLA — debout sur le sol, pas de lévitation ── */}
       <div style={{
         position: 'absolute',
         left: (winW - avatarW) / 2,
-        top: avatarBottom - avatarH,
+        top: lolaTop,
         width: avatarW,
         pointerEvents: 'none',
         zIndex: 10,
-        animation: 'lolaFloat 4.5s ease-in-out infinite',
+        // Breath subtil via transform, pas de float qui lève du sol
+        transform: `translateY(${Math.sin(breathPhase * Math.PI * 2) * 1.5}px)`,
       }}>
         <LolaV2
           mouthState={mouthState}
