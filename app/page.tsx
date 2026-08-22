@@ -183,13 +183,42 @@ export default function LolaPage() {
   const handleFiles = useCallback((files: File[]) => {
     if (!files.length) return
     const f = files[0]
-    const reader = new FileReader()
-    reader.onload = e => {
-      const content = e.target?.result as string
-      setFileReady(false)
-      sendMessage(`[Document: ${f.name}]\n\n${content.slice(0, 3000)}\n\nRésume et analyse ce document.`)
+    const isImage = f.type.startsWith('image/')
+
+    if (isImage) {
+      // Images → base64 pour Claude Vision
+      const reader = new FileReader()
+      reader.onload = e => {
+        const b64 = (e.target?.result as string).split(',')[1]
+        const mediaType = f.type as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp'
+        setFileReady(false)
+        // Envoyer comme message vision
+        const userMsg: Message = { role: 'user', content: `[Image: ${f.name}] Analyse et décris cette image.` }
+        const history = [...messagesRef.current, userMsg]
+        setMessages(history); setLoading(true); setExpression('thinking')
+        fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ messages: history, image: { data: b64, mediaType } })
+        }).then(r => r.json()).then(data => {
+          const lolaMsg: Message = { role: 'assistant', content: data.text }
+          setMessages([...history, lolaMsg]); setLastResponse(data.text)
+          setLoading(false); setExpression('smiling')
+          setScreenContent(data.text)
+          playTTS(data.text)
+        }).catch(() => { setLoading(false); setExpression('neutral') })
+      }
+      reader.readAsDataURL(f)
+    } else {
+      // Fichiers texte → lecture texte
+      const reader = new FileReader()
+      reader.onload = e => {
+        const content = e.target?.result as string
+        setFileReady(false)
+        sendMessage(`[Document: ${f.name}]\n\n${content.slice(0, 3000)}\n\nRésume et analyse ce document.`)
+      }
+      reader.readAsText(f)
     }
-    reader.readAsText(f)
   }, [sendMessage])
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({

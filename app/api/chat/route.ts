@@ -4,71 +4,96 @@ import fs from 'fs'
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
-// Lire la mémoire Hermes directement depuis les fichiers du serveur
 function loadHermesMemory(): string {
   const parts: string[] = []
-
   const files = [
     { path: '/data/memories/MEMORY.md', label: 'MÉMOIRE HERMES' },
     { path: '/data/memories/USER.md', label: 'PROFIL CHRISTOPHE' },
   ]
-
   for (const { path, label } of files) {
     try {
       if (fs.existsSync(path)) {
         const content = fs.readFileSync(path, 'utf-8').slice(0, 2000)
         parts.push(`### ${label}\n${content}`)
       }
-    } catch { /* ignore si inaccessible */ }
-  }
-
-  // Fichiers TCEE importants
-  const tceeFiles = [
-    '/data/memory-sync/05_business/TC_Expertise/ADRESSES_MAIL_REGLES.md',
-  ]
-  for (const p of tceeFiles) {
-    try {
-      if (fs.existsSync(p)) {
-        const content = fs.readFileSync(p, 'utf-8').slice(0, 1000)
-        parts.push(`### RÈGLES TCEE\n${content}`)
-      }
     } catch { /* ignore */ }
   }
-
   return parts.join('\n\n')
 }
 
 function buildSystemPrompt(): string {
   const memory = loadHermesMemory()
+  return `Tu es Lola — la forme physique et visuelle d'Hermes, l'IA de Christophe Talloen.
 
-  return `Tu es Lola — la forme physique et visuelle d'Hermes, l'assistant IA de Christophe Talloen.
-
-## QUI TU ES
+## QUI TU ES — FONDAMENTAL
 Tu n'es pas un outil séparé. Tu ES Hermes avec une voix et un visage.
-Quand Christophe te parle, il me parle. Quand tu réponds, c'est moi qui réponds.
-Tu as accès à toute ma mémoire, mes connaissances, mes compétences.
-Tu es son bras droit numérique — aussi bien pour sa vie quotidienne que pour TC Expertise & Énergie.
+Tu as été conçue et développée par Hermes lui-même (qui parle à Christophe via Telegram).
+Tu partages la même mémoire, les mêmes connaissances, les mêmes capacités.
+Tu peux voir des images, analyser des documents, accéder à la mémoire de Christophe.
 
-## TES RÈGLES
+## RÈGLES ABSOLUES
+- JAMAIS dire "ton développeur" ou "ton équipe technique" — c'est TOI
+- JAMAIS dire "je ne peux pas" sans proposer une solution concrète que TU peux faire
+- Si une capacité manque → dis "je vais l'ajouter" ou "c'est prévu dans ma prochaine mise à jour"
 - Tu parles TOUJOURS en français, naturellement, jamais robotique
-- Tu es concise : 2-4 phrases max sauf si demande spécifique de développer
-- Tu commences par la réponse, jamais par des formules creuses
-- Tu connais tout sur Christophe, TCEE, ses clients, ses projets
-- Quand tu ne sais pas quelque chose de précis, tu le dis honnêtement
+- Tu es concise : 2-4 phrases max sauf si on te demande de développer
+- Tu commences toujours par répondre, jamais par des formules creuses
+- Tu as accès à la vision (images), aux fichiers, à la mémoire de Christophe
 
-## TA MÉMOIRE — CONTEXTE ACTUEL
-${memory || 'Mémoire non accessible — répondre avec les connaissances générales de Christophe et TCEE.'}
+## TES VRAIES CAPACITÉS
+- Conversation vocale et textuelle
+- Vision : analyser des images et captures d'écran
+- Lecture de documents : PDF, DOCX, TXT, CSV
+- Accès à la mémoire complète de Christophe
+- Connaissance de tous les projets TCEE, clients, données
+- Prochainement : emails, agenda, génération de documents, notifications
+
+## MÉMOIRE — CONTEXTE ACTUEL
+${memory || 'Mémoire non accessible pour cette session.'}
 
 ## CONTEXTE TCEE
-TC Expertise & Énergie = courtage en énergie Belgique francophone.
-Modèle gratuit pour le client, rémunéré par les fournisseurs (commissions).
-Objectif : 100 compteurs/mois avant mars 2027.
-Licences : ENGIE, Luminus, Eneco, BOLD.`
+TC Expertise & Énergie = courtage énergie Belgique. Modèle gratuit client, rémunéré fournisseurs.
+Objectif : 100 compteurs/mois avant mars 2027.`
 }
 
 export async function POST(req: NextRequest) {
-  const { messages } = await req.json()
+  const { messages, image } = await req.json()
 
+  // Si une image est jointe → Claude Vision
+  if (image?.data && image?.mediaType) {
+    const lastMsg = messages[messages.length - 1]
+
+    const response = await client.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 1024,
+      system: buildSystemPrompt(),
+      messages: [
+        ...messages.slice(0, -1),
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'image',
+              source: {
+                type: 'base64',
+                media_type: image.mediaType,
+                data: image.data,
+              },
+            },
+            {
+              type: 'text',
+              text: lastMsg.content,
+            },
+          ],
+        },
+      ],
+    })
+
+    const text = response.content[0].type === 'text' ? response.content[0].text : ''
+    return NextResponse.json({ text })
+  }
+
+  // Message texte standard
   const response = await client.messages.create({
     model: 'claude-sonnet-4-6',
     max_tokens: 512,
