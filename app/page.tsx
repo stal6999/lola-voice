@@ -1,9 +1,8 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
-import LolaFullBody from '@/components/LolaFullBody'
-import BatcaveBackground from '@/components/BatcaveBackground'
-import CSSParticles from '@/components/CSSParticles'
+import LolaV2 from '@/components/LolaV2'
+import LolaHome from '@/components/LolaHome'
 import MSDosTerminal from '@/components/MSDosTerminal'
 import DocNotification from '@/components/DocNotification'
 
@@ -25,7 +24,7 @@ export default function LolaPage() {
   const [headTiltX, setHeadTiltX]           = useState(0)
   const [eyeShiftX, setEyeShiftX]          = useState(0)
   const [eyeShiftY, setEyeShiftY]          = useState(0)
-  const [microExp, setMicroExp] = useState<'none' | 'brow-raise' | 'slight-smile' | 'glance-screen'>('none')
+  const [microExp, setMicroExp] = useState<'none'|'brow-raise'|'slight-smile'|'glance-screen'>('none')
   const [conversationMode, setConversationMode] = useState(false)
   const [muted, setMuted]                   = useState(false)
   const [input, setInput]                   = useState('')
@@ -36,7 +35,8 @@ export default function LolaPage() {
   const [winW, setWinW] = useState(390)
   const [winH, setWinH] = useState(844)
 
-  const recognitionRef = useRef<unknown>(null)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const recognitionRef = useRef<any>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const audioUnlockedRef = useRef(false)
   const messagesRef = useRef<Message[]>([])
@@ -44,57 +44,54 @@ export default function LolaPage() {
   const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    setWinW(window.innerWidth)
-    setWinH(window.innerHeight)
-    const onResize = () => { setWinW(window.innerWidth); setWinH(window.innerHeight) }
-    window.addEventListener('resize', onResize)
-    return () => window.removeEventListener('resize', onResize)
+    setWinW(window.innerWidth); setWinH(window.innerHeight)
+    const r = () => { setWinW(window.innerWidth); setWinH(window.innerHeight) }
+    window.addEventListener('resize', r)
+    return () => window.removeEventListener('resize', r)
   }, [])
 
   useEffect(() => { messagesRef.current = messages }, [messages])
 
-  // Blink
+  // Natural blink
   useEffect(() => {
     const blink = () => {
       setBlinking(true)
-      setTimeout(() => setBlinking(false), 150)
-      if (Math.random() < 0.2) setTimeout(() => {
-        setBlinking(true)
-        setTimeout(() => setBlinking(false), 120)
-      }, 260)
+      setTimeout(() => setBlinking(false), 130)
+      if (Math.random() < 0.18) setTimeout(() => {
+        setBlinking(true); setTimeout(() => setBlinking(false), 110)
+      }, 240)
     }
-    const id = setInterval(() => { if (Math.random() > 0.25) blink() }, 3200 + Math.random() * 1800)
+    const id = setInterval(() => { if (Math.random() > 0.22) blink() }, 2800 + Math.random() * 2200)
     return () => clearInterval(id)
   }, [])
 
   // Breathing
   useEffect(() => {
     let frame: number
-    const start = Date.now()
-    const tick = () => { setBreathPhase(((Date.now() - start) / 4000) % 1); frame = requestAnimationFrame(tick) }
+    const s = Date.now()
+    const tick = () => { setBreathPhase(((Date.now()-s)/4200)%1); frame = requestAnimationFrame(tick) }
     frame = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(frame)
   }, [])
 
-  // Micro-behaviours
+  // Micro-behaviours — human idle
   useEffect(() => {
     const id = setInterval(() => {
       if (speaking || listening || loading) return
       const r = Math.random()
-      if (r < 0.22) {
-        setEyeShiftX(-2.5 + Math.random() * 5); setEyeShiftY(-1 + Math.random() * 2); setHeadTiltX(-1.5 + Math.random() * 3)
-        setTimeout(() => { setEyeShiftX(0); setEyeShiftY(0); setHeadTiltX(0) }, 1400 + Math.random() * 800)
-      } else if (r < 0.32) { setMicroExp('brow-raise'); setTimeout(() => setMicroExp('none'), 700) }
-      else if (r < 0.42) { setMicroExp('slight-smile'); setTimeout(() => setMicroExp('none'), 1100) }
-      else if (r < 0.52) {
-        setMicroExp('glance-screen'); setEyeShiftX(-3.5); setHeadTiltX(-2.5)
-        setTimeout(() => { setEyeShiftX(0); setHeadTiltX(0); setMicroExp('none') }, 1800)
+      if (r < 0.2) {
+        setEyeShiftX(-2+Math.random()*4); setEyeShiftY(-1+Math.random()*2); setHeadTiltX(-1.5+Math.random()*3)
+        setTimeout(() => { setEyeShiftX(0); setEyeShiftY(0); setHeadTiltX(0) }, 1200+Math.random()*800)
+      } else if (r < 0.3) { setMicroExp('brow-raise'); setTimeout(() => setMicroExp('none'), 650) }
+      else if (r < 0.4) { setMicroExp('slight-smile'); setTimeout(() => setMicroExp('none'), 1000) }
+      else if (r < 0.5) {
+        setMicroExp('glance-screen'); setEyeShiftX(-3); setHeadTiltX(-2.5)
+        setTimeout(() => { setEyeShiftX(0); setHeadTiltX(0); setMicroExp('none') }, 1600)
       }
-    }, 3800 + Math.random() * 2500)
+    }, 3500+Math.random()*2500)
     return () => clearInterval(id)
   }, [speaking, listening, loading])
 
-  // Unlock audio
   function unlockAudio() {
     if (audioUnlockedRef.current) return
     const a = document.createElement('audio')
@@ -110,19 +107,14 @@ export default function LolaPage() {
     unlockAudio()
     const userMsg: Message = { role: 'user', content: text }
     const history = [...messagesRef.current, userMsg]
-    setMessages(history)
-    setInput('')
-    setLiveTranscript('')
-    setLoading(true)
-    setExpression('thinking')
+    setMessages(history); setInput(''); setLiveTranscript('')
+    setLoading(true); setExpression('thinking')
     try {
       const res = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: history }) })
       const data = await res.json()
       const lolaMsg: Message = { role: 'assistant', content: data.text }
       setMessages([...history, lolaMsg])
-      setLastResponse(data.text)
-      setLoading(false)
-      setExpression('smiling')
+      setLastResponse(data.text); setLoading(false); setExpression('smiling')
       setScreenContent(data.text)
       playTTS(data.text)
     } catch { setLoading(false); setExpression('neutral') }
@@ -136,19 +128,16 @@ export default function LolaPage() {
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
       if (!audioRef.current) {
-        const a = document.createElement('audio')
-        a.setAttribute('playsinline', '')
-        document.body.appendChild(a)
-        audioRef.current = a
+        const a = document.createElement('audio'); a.setAttribute('playsinline', '')
+        document.body.appendChild(a); audioRef.current = a
       }
       const audio = audioRef.current
       audio.pause(); audio.src = url; audio.volume = 1
       let lip: ReturnType<typeof setInterval> | null = null
-      audio.onplay = () => { let f = 0; lip = setInterval(() => { f++; setMouthState((['closed','half','open','half'] as MouthState[])[f % 4]) }, 120) }
+      audio.onplay = () => { let f = 0; lip = setInterval(() => { f++; setMouthState((['closed','half','open','half'] as MouthState[])[f%4]) }, 115) }
       audio.onended = () => {
-        if (lip) clearInterval(lip)
-        setSpeaking(false); setExpression('neutral'); setMouthState('closed')
-        if (conversationMode && !muted) setTimeout(() => startListening(), 300)
+        if (lip) clearInterval(lip); setSpeaking(false); setExpression('neutral'); setMouthState('closed')
+        if (conversationMode && !muted) setTimeout(() => startListening(), 350)
       }
       audio.onerror = () => { if (lip) clearInterval(lip); setSpeaking(false); setExpression('neutral'); setMouthState('closed') }
       audio.play()
@@ -170,7 +159,7 @@ export default function LolaPage() {
     if (!SR) { alert('Utilise Chrome ou Safari.'); return }
     const rec = new SR(); rec.lang = 'fr-FR'; rec.continuous = true; rec.interimResults = true
     let final = ''; let spoken = false; setExpression('listening')
-    const resetSilence = () => {
+    const resetSil = () => {
       if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current)
       silenceTimerRef.current = setTimeout(() => { if (spoken && final.trim()) rec.stop() }, 1500)
     }
@@ -179,15 +168,14 @@ export default function LolaPage() {
       let interim = ''
       for (let i = e.resultIndex; i < e.results.length; i++) {
         const t = e.results[i][0].transcript
-        if (e.results[i].isFinal) { final += t + ' '; spoken = true } else { interim = t; spoken = true }
+        if (e.results[i].isFinal) { final += t+' '; spoken = true } else { interim = t; spoken = true }
       }
-      setLiveTranscript(final + interim); resetSilence()
+      setLiveTranscript(final+interim); resetSil()
     }
     rec.onend = () => {
       if (silenceTimerRef.current) { clearTimeout(silenceTimerRef.current); silenceTimerRef.current = null }
       setListening(false); const t = final.trim()
-      if (t) sendMessage(t); else setExpression('neutral')
-      setLiveTranscript('')
+      if (t) sendMessage(t); else setExpression('neutral'); setLiveTranscript('')
     }
     rec.onerror = () => { setListening(false); setLiveTranscript(''); setExpression('neutral') }
     recognitionRef.current = rec; rec.start(); setListening(true)
@@ -195,8 +183,7 @@ export default function LolaPage() {
 
   function stopListening() {
     if (silenceTimerRef.current) { clearTimeout(silenceTimerRef.current); silenceTimerRef.current = null }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (recognitionRef.current as any)?.stop(); setListening(false)
+    recognitionRef.current?.stop(); setListening(false)
   }
 
   function toggleMute() {
@@ -205,8 +192,7 @@ export default function LolaPage() {
       if (conversationMode && !speaking && !loading) setTimeout(() => startListening(), 200)
     } else {
       setMuted(true)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      if (listening) { (recognitionRef.current as any)?.stop(); setListening(false); setLiveTranscript('') }
+      if (listening) { recognitionRef.current?.stop(); setListening(false); setLiveTranscript('') }
     }
   }
 
@@ -216,8 +202,8 @@ export default function LolaPage() {
       const reader = new FileReader()
       reader.onload = e => {
         const content = e.target?.result as string
-        setDocNotification(`📄 "${f.name}" assimilé — Lola lit...`)
-        setScreenContent(`📄 ${f.name}\n\n${content.slice(0, 600)}...`)
+        setDocNotification(`📄 "${f.name}" — Lola lit et analyse...`)
+        setScreenContent(`📄 ${f.name}\n\n${content.slice(0, 500)}...`)
         sendMessage(`[Document reçu: ${f.name}]\n\n${content.slice(0, 3000)}\n\nRésume ce document.`)
       }
       reader.readAsText(f)
@@ -225,31 +211,35 @@ export default function LolaPage() {
     setShowDocDrop(false)
   }
 
-  // Layout dimensions
-  const avatarW = Math.min(winW * 0.52, 200)
-  const avatarLeft = (winW - avatarW) / 2
+  // Lola position — she stands ON the floor
+  // LolaHome SVG: floor starts at y=620/700 = 88.5% of height
+  const floorPct = 0.885
+  const avatarW = Math.min(winW * 0.48, 195)
+  const avatarH = avatarW * 2.4
+  const floorY = winH * floorPct
+  const avatarBottom = floorY // feet on floor
+
+  // Emotion for crystals
+  const lolaEmotion = speaking ? 'excited' : listening ? 'listening' : loading ? 'thinking' : expression === 'smiling' ? 'happy' : 'neutral'
 
   return (
-    <div style={{ position: 'fixed', inset: 0, overflow: 'hidden', background: '#070c20', userSelect: 'none' }}>
+    <div style={{ position: 'fixed', inset: 0, overflow: 'hidden', background: '#060310' }}>
 
-      {/* ── FOND PLEIN ÉCRAN ── */}
-      <BatcaveBackground width={winW} height={winH} screenContent={screenContent} audioActive={speaking} />
+      {/* ── DÉCOR PLEIN ÉCRAN ── */}
+      <LolaHome width={winW} height={winH} screenContent={screenContent}
+        audioActive={speaking} lolaEmotion={lolaEmotion} />
 
-      {/* ── PARTICULES ── */}
-      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
-        <CSSParticles count={12} />
-      </div>
-
-      {/* ── LOLA PLEIN CORPS ── */}
+      {/* ── LOLA — debout sur le sol ── */}
       <div style={{
         position: 'absolute',
-        left: avatarLeft,
-        bottom: 70,
+        left: (winW - avatarW) / 2,
+        top: avatarBottom - avatarH,
         width: avatarW,
-        animation: 'lolaFloat 4s ease-in-out infinite',
+        pointerEvents: 'none',
         zIndex: 10,
+        animation: 'lolaFloat 4.5s ease-in-out infinite',
       }}>
-        <LolaFullBody
+        <LolaV2
           mouthState={mouthState}
           blinking={blinking}
           expression={expression}
@@ -258,101 +248,100 @@ export default function LolaPage() {
           eyeShiftX={eyeShiftX}
           eyeShiftY={eyeShiftY}
           microExpression={microExp}
-          width={avatarW}
           speaking={speaking}
           listening={listening}
+          width={avatarW}
         />
       </div>
 
       {/* ── BOUTONS GAUCHE ── */}
-      <div style={{
-        position: 'absolute', left: 10, top: '30%',
-        display: 'flex', flexDirection: 'column', gap: 12, zIndex: 20,
-      }}>
-        {/* Conversation */}
-        <button onClick={toggleConversation} style={btnStyle(conversationMode ? '#e74c3c' : '#C9A84C', conversationMode)}>
+      <div style={{ position: 'absolute', left: 10, top: '35%', display: 'flex', flexDirection: 'column', gap: 10, zIndex: 20 }}>
+        <button onClick={toggleConversation} style={btn(conversationMode ? '#e74c3c' : '#a8e0ff', conversationMode)}>
           {conversationMode ? '⏹' : '🎙'}
         </button>
-        {/* Mute */}
         {conversationMode && (
-          <button onClick={toggleMute} style={btnStyle(muted ? '#e74c3c' : '#2ecc71', muted)}>
+          <button onClick={toggleMute} style={btn(muted ? '#e74c3c' : '#88d888', muted)}>
             {muted ? '🔇' : '🔊'}
           </button>
         )}
-        {/* Chat */}
-        <button onClick={() => setShowChat(!showChat)} style={btnStyle('#8A9BB5', showChat)}>
-          💬
-        </button>
+        <button onClick={() => setShowChat(!showChat)} style={btn('#c8a870', showChat)}>💬</button>
       </div>
 
       {/* ── BOUTONS DROITE ── */}
-      <div style={{
-        position: 'absolute', right: 10, top: '30%',
-        display: 'flex', flexDirection: 'column', gap: 12, zIndex: 20,
-      }}>
-        {/* Documents */}
-        <button onClick={() => setShowDocDrop(!showDocDrop)} style={btnStyle('#C9A84C', showDocDrop)}>
-          📁
-        </button>
-        {/* Grand écran toggle */}
-        <button onClick={() => setScreenContent(screenContent ? null : lastResponse || null)}
-          style={btnStyle('#3498db', !!screenContent)}>
-          🖥
-        </button>
-        {/* Terminal */}
-        <button onClick={() => {}} style={btnStyle('#2ecc71', loading)} disabled>
-          {loading ? '⚡' : '💻'}
-        </button>
+      <div style={{ position: 'absolute', right: 10, top: '35%', display: 'flex', flexDirection: 'column', gap: 10, zIndex: 20 }}>
+        <button onClick={() => setShowDocDrop(!showDocDrop)} style={btn('#a8d8ff', showDocDrop)}>📁</button>
+        <button onClick={() => setScreenContent(screenContent ? null : lastResponse || null)} style={btn('#d8a8ff', !!screenContent)}>🖥</button>
       </div>
 
-      {/* ── STATUS HEADER ── */}
+      {/* ── STATUS ── */}
       <div style={{
-        position: 'absolute', top: 12, left: '50%', transform: 'translateX(-50%)',
-        display: 'flex', alignItems: 'center', gap: 8,
-        background: 'rgba(8,12,28,0.85)',
-        border: '1px solid rgba(201,168,76,0.15)',
-        borderRadius: 20, padding: '5px 14px', zIndex: 20,
+        position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%)',
+        background: 'rgba(10,6,20,0.82)', backdropFilter: 'blur(12px)',
+        border: '1px solid rgba(140,210,255,0.15)',
+        borderRadius: 20, padding: '5px 14px',
+        display: 'flex', alignItems: 'center', gap: 7, zIndex: 20,
       }}>
         <div style={{
           width: 7, height: 7, borderRadius: '50%',
-          background: conversationMode ? (listening ? '#e74c3c' : speaking ? '#2ecc71' : '#C9A84C') : '#8A9BB5',
+          background: conversationMode ? (listening ? '#ff8888' : speaking ? '#88d888' : '#c8a870') : '#a8d8ff',
           animation: (listening || speaking) ? 'pulse 1s infinite' : 'none',
         }} />
-        <span style={{ fontSize: 11, color: '#8A9BB5', fontFamily: 'monospace' }}>
+        <span style={{ fontSize: 10, color: 'rgba(180,220,255,0.7)', fontFamily: 'monospace', letterSpacing: 1 }}>
           {conversationMode
-            ? muted ? 'MUTE' : listening ? 'ÉCOUTE' : speaking ? 'PARLE' : loading ? 'RÉFLÉCHIT' : 'EN LIGNE'
-            : 'LOLA — TC EXPERTISE'}
+            ? (muted ? 'SILENCIEUX' : listening ? 'ÉCOUTE' : speaking ? 'PARLE' : loading ? 'RÉFLÉCHIT' : 'EN LIGNE')
+            : 'LOLA'}
         </span>
       </div>
+
+      {/* ── BULLE RÉPONSE ── */}
+      {(lastResponse || liveTranscript) && !showChat && (
+        <div style={{
+          position: 'absolute',
+          bottom: 65, left: 12, right: 12,
+          background: 'rgba(10,6,20,0.88)', backdropFilter: 'blur(16px)',
+          border: '1px solid rgba(140,210,255,0.12)',
+          borderRadius: 14, padding: '9px 14px',
+          maxHeight: 68, overflow: 'hidden', zIndex: 5,
+        }}>
+          <div style={{
+            fontSize: 12, color: liveTranscript ? '#a8d8ff' : '#ddeeff',
+            lineHeight: 1.45, fontStyle: liveTranscript ? 'italic' : 'normal',
+            display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+          }}>
+            {loading ? '✦ …' : liveTranscript ? `"${liveTranscript}…"` : lastResponse}
+          </div>
+        </div>
+      )}
 
       {/* ── CHAT OVERLAY ── */}
       {showChat && (
         <div style={{
-          position: 'absolute', bottom: 70, left: 8, right: 8, top: 50,
-          background: 'rgba(7,12,32,0.96)',
-          border: '1px solid rgba(201,168,76,0.12)',
-          borderRadius: 16, zIndex: 30,
-          display: 'flex', flexDirection: 'column', overflow: 'hidden',
+          position: 'absolute', inset: '45px 0 60px 0',
+          background: 'rgba(8,5,18,0.96)', backdropFilter: 'blur(20px)',
+          border: '1px solid rgba(140,210,255,0.1)',
+          zIndex: 30, display: 'flex', flexDirection: 'column',
         }}>
-          <div style={{ padding: '10px 14px', borderBottom: '1px solid rgba(201,168,76,0.08)', display: 'flex', justifyContent: 'space-between' }}>
-            <span style={{ fontFamily: 'Georgia, serif', fontSize: 13, color: '#C9A84C' }}>Conversation</span>
-            <button onClick={() => setShowChat(false)} style={{ background: 'none', border: 'none', color: '#8A9BB5', cursor: 'pointer' }}>✕</button>
+          <div style={{ padding: '10px 14px', borderBottom: '1px solid rgba(140,210,255,0.08)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontFamily: 'Georgia, serif', fontSize: 13, color: '#a8d8ff' }}>Conversation</span>
+            <button onClick={() => setShowChat(false)} style={{ background: 'none', border: 'none', color: '#8A9BB5', cursor: 'pointer', fontSize: 16 }}>✕</button>
           </div>
           <div style={{ flex: 1, overflowY: 'auto', padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
             {messages.map((m, i) => (
               <div key={i} style={{
                 alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start',
-                maxWidth: '82%', padding: '8px 12px',
-                borderRadius: m.role === 'user' ? '14px 14px 4px 14px' : '4px 14px 14px 14px',
-                background: m.role === 'user' ? 'linear-gradient(135deg,#C9A84C,#E8C96A)' : 'rgba(255,255,255,.05)',
-                color: m.role === 'user' ? '#0d1530' : '#fff',
+                maxWidth: '82%', padding: '9px 13px',
+                borderRadius: m.role === 'user' ? '16px 16px 4px 16px' : '4px 16px 16px 16px',
+                background: m.role === 'user' ? 'rgba(168,216,255,0.15)' : 'rgba(255,255,255,0.04)',
+                border: `1px solid ${m.role === 'user' ? 'rgba(140,210,255,0.2)' : 'rgba(255,255,255,0.06)'}`,
+                color: m.role === 'user' ? '#a8d8ff' : '#ddeeff',
                 fontSize: 13, lineHeight: 1.5, textAlign: 'left', wordBreak: 'break-word',
               }}>{m.content}</div>
             ))}
             {liveTranscript && (
-              <div style={{ alignSelf: 'flex-end', maxWidth: '82%', padding: '8px 12px',
-                borderRadius: '14px 14px 4px 14px', background: 'rgba(201,168,76,0.2)',
-                border: '1px dashed rgba(201,168,76,0.4)', color: '#E8C96A', fontSize: 13, fontStyle: 'italic' }}>
+              <div style={{ alignSelf: 'flex-end', maxWidth: '82%', padding: '9px 13px',
+                borderRadius: '16px 16px 4px 16px', background: 'rgba(168,216,255,0.08)',
+                border: '1px dashed rgba(140,210,255,0.25)', color: '#a8d8ff',
+                fontSize: 13, fontStyle: 'italic' }}>
                 {liveTranscript}…
               </div>
             )}
@@ -360,106 +349,81 @@ export default function LolaPage() {
         </div>
       )}
 
-      {/* ── ZONE DOC DROP ── */}
+      {/* ── DOC DROP ── */}
       {showDocDrop && (
         <div style={{
-          position: 'absolute', right: 60, top: '25%',
-          width: 200,
-          background: 'rgba(7,12,32,0.97)',
-          border: '1px solid rgba(201,168,76,0.25)',
-          borderRadius: 12, padding: 14, zIndex: 30,
+          position: 'absolute', right: 60, top: '30%', width: 200,
+          background: 'rgba(8,5,18,0.96)', backdropFilter: 'blur(16px)',
+          border: '1px solid rgba(140,210,255,0.2)',
+          borderRadius: 14, padding: 14, zIndex: 30,
         }}
           onDragOver={e => e.preventDefault()}
           onDrop={e => { e.preventDefault(); handleFile(e.dataTransfer.files) }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
-            <span style={{ fontSize: 12, color: '#C9A84C', fontWeight: 600 }}>📁 Casier Lola</span>
+            <span style={{ fontSize: 12, color: '#a8d8ff' }}>📁 Casier de Lola</span>
             <button onClick={() => setShowDocDrop(false)} style={{ background: 'none', border: 'none', color: '#8A9BB5', cursor: 'pointer' }}>✕</button>
           </div>
           <div onClick={() => fileRef.current?.click()}
-            style={{ border: '1.5px dashed rgba(201,168,76,0.3)', borderRadius: 8, padding: '16px 10px',
-              textAlign: 'center', cursor: 'pointer', background: 'rgba(201,168,76,0.03)' }}>
-            <div style={{ fontSize: 24 }}>📎</div>
-            <div style={{ fontSize: 11, color: '#C9A84C', marginTop: 4 }}>Dépose ou clique</div>
-            <div style={{ fontSize: 9, color: '#8A9BB5', marginTop: 2 }}>TXT, CSV, MD...</div>
+            style={{ border: '1.5px dashed rgba(140,210,255,0.25)', borderRadius: 10,
+              padding: '18px 10px', textAlign: 'center', cursor: 'pointer',
+              background: 'rgba(140,210,255,0.03)' }}>
+            <div style={{ fontSize: 28 }}>📎</div>
+            <div style={{ fontSize: 11, color: '#a8d8ff', marginTop: 6 }}>Dépose ou clique</div>
+            <div style={{ fontSize: 9, color: '#8A9BB5', marginTop: 3 }}>TXT, CSV, MD...</div>
           </div>
           <input ref={fileRef} type="file" multiple style={{ display: 'none' }}
             onChange={e => handleFile(e.target.files)} />
         </div>
       )}
 
-      {/* ── BULLE RÉPONSE ── */}
-      {(lastResponse || liveTranscript) && !showChat && (
-        <div style={{
-          position: 'absolute', bottom: 74,
-          left: 8, right: 8,
-          background: 'rgba(7,12,32,0.88)',
-          border: '1px solid rgba(201,168,76,0.12)',
-          borderRadius: 12, padding: '8px 14px',
-          maxHeight: 70, overflow: 'hidden',
-          zIndex: 5,
-        }}>
-          <div style={{ fontSize: 12, color: liveTranscript ? '#E8C96A' : '#e8f0ff',
-            lineHeight: 1.4, fontStyle: liveTranscript ? 'italic' : 'normal',
-            overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box',
-            WebkitLineClamp: 3, WebkitBoxOrient: 'vertical' }}>
-            {loading ? '⌛ …' : liveTranscript ? `"${liveTranscript}…"` : lastResponse}
-          </div>
-        </div>
-      )}
-
-      {/* ── BARRE INPUT ── */}
+      {/* ── INPUT BAR ── */}
       <div style={{
         position: 'absolute', bottom: 0, left: 0, right: 0,
-        background: 'rgba(7,12,32,0.95)',
-        borderTop: '1px solid rgba(201,168,76,0.1)',
+        background: 'rgba(8,5,18,0.92)', backdropFilter: 'blur(16px)',
+        borderTop: '1px solid rgba(140,210,255,0.08)',
         padding: '8px 10px', paddingBottom: 'max(8px, env(safe-area-inset-bottom))',
         display: 'flex', gap: 8, alignItems: 'center', zIndex: 20,
       }}>
         <input value={input} onChange={e => setInput(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); sendMessage(input) } }}
           placeholder="Écris à Lola…" disabled={listening}
-          style={{ flex: 1, background: 'rgba(255,255,255,0.05)',
-            border: '1px solid rgba(255,255,255,0.08)', borderRadius: 20,
-            padding: '9px 14px', color: '#fff', fontSize: 14, outline: 'none',
-            fontFamily: 'inherit', opacity: listening ? 0.3 : 1 }} />
+          style={{ flex: 1, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(140,210,255,0.1)',
+            borderRadius: 20, padding: '9px 14px', color: '#ddeeff',
+            fontSize: 14, outline: 'none', fontFamily: 'inherit', opacity: listening ? 0.3 : 1 }} />
         <button onClick={() => sendMessage(input)} disabled={!input.trim() || loading || listening}
           style={{ width: 38, height: 38, borderRadius: '50%', border: 'none', cursor: 'pointer',
-            background: input.trim() ? 'rgba(201,168,76,0.2)' : 'rgba(255,255,255,0.05)',
-            color: input.trim() ? '#C9A84C' : '#8A9BB5', fontSize: 16 }}>
+            background: input.trim() ? 'rgba(140,210,255,0.15)' : 'rgba(255,255,255,0.04)',
+            color: input.trim() ? '#a8d8ff' : '#8A9BB5', fontSize: 16 }}>
           ➤
         </button>
       </div>
 
-      {/* ── TERMINAL MS-DOS ── */}
       <MSDosTerminal visible={loading} processing={loading} taskName="Traitement" />
-
-      {/* ── NOTIFICATION ── */}
       <DocNotification message={docNotification} onDismiss={() => setDocNotification(null)} />
 
       <style>{`
-        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.35} }
-        @keyframes lolaFloat { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-5px)} }
-        @keyframes recPulse { 0%,100%{box-shadow:0 0 8px rgba(231,76,60,.3)} 50%{box-shadow:0 0 22px rgba(231,76,60,.7)} }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+        @keyframes lolaFloat { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-4px)} }
         @keyframes particleFloat { 0%{transform:translateY(0) translateX(0) scale(.3);opacity:0} 15%{opacity:1} 50%{transform:translateY(-80px) translateX(var(--drift,10px)) scale(1)} 85%{opacity:.4} 100%{transform:translateY(-160px) translateX(calc(var(--drift,10px)*1.5)) scale(.1);opacity:0} }
         @keyframes dataFlow { 0%{transform:translateY(0);opacity:0} 10%{opacity:1} 90%{opacity:1} 100%{transform:translateY(120px);opacity:0} }
-        input::placeholder { color: #8A9BB5; }
-        button:active { transform: scale(0.92); }
+        input::placeholder { color: rgba(140,180,220,0.4); }
+        button:active { transform: scale(0.9); }
         * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
+        ::-webkit-scrollbar { width: 3px; } ::-webkit-scrollbar-thumb { background: rgba(140,210,255,0.15); }
       `}</style>
     </div>
   )
 }
 
-function btnStyle(color: string, active: boolean): React.CSSProperties {
+function btn(color: string, active: boolean): React.CSSProperties {
   return {
-    width: 46, height: 46, borderRadius: '50%',
-    border: `1px solid ${active ? color : 'rgba(255,255,255,0.08)'}`,
-    background: active ? `${color}28` : 'rgba(7,12,32,0.85)',
-    color: active ? color : '#8A9BB5',
-    fontSize: 20, cursor: 'pointer', display: 'flex',
-    alignItems: 'center', justifyContent: 'center',
-    boxShadow: active ? `0 0 14px ${color}44` : '0 2px 8px rgba(0,0,0,0.4)',
+    width: 44, height: 44, borderRadius: '50%',
+    border: `1px solid ${active ? color : 'rgba(140,210,255,0.1)'}`,
+    background: active ? `${color}22` : 'rgba(8,5,18,0.8)',
+    color: active ? color : 'rgba(140,180,220,0.5)',
+    fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+    backdropFilter: 'blur(10px)',
+    boxShadow: active ? `0 0 16px ${color}44` : '0 2px 10px rgba(0,0,0,0.4)',
     transition: 'all .2s',
-    backdropFilter: 'blur(8px)',
   }
 }
