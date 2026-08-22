@@ -2,7 +2,14 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useDropzone } from 'react-dropzone'
+import dynamic from 'next/dynamic'
 import LolaScene from '@/components/LolaScene'
+
+// Lola3D chargée côté client uniquement (WebGL)
+const Lola3D = dynamic(() => import('@/components/Lola3D'), {
+  ssr: false,
+  loading: () => null,
+})
 import { noise1d } from '@/hooks/useOrganicMotion'
 
 type Message = { role: 'user' | 'assistant'; content: string }
@@ -421,8 +428,9 @@ function PCLayout({ winW, winH, screenContent, speaking, listening, loading, lol
       {/* ── ZONE PRINCIPALE DROITE ── */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
 
-        {/* SCÈNE — décor + Lola */}
+        {/* SCÈNE — décor + Lola 3D */}
         <div style={{ width: sceneW, height: sceneH, position: 'relative', overflow: 'hidden' }}>
+          {/* Décor SVG en fond */}
           <LolaScene
             width={sceneW} height={sceneH}
             screenContent={screenContent}
@@ -433,6 +441,24 @@ function PCLayout({ winW, winH, screenContent, speaking, listening, loading, lol
             eyeShiftX={eyeShiftX} eyeShiftY={eyeShiftY}
             microExpression={microExpression}
           />
+          {/* Lola 3D par-dessus, côté droit */}
+          <div style={{
+            position: 'absolute',
+            right: 0, bottom: 0,
+            width: Math.round(sceneW * 0.42),
+            height: sceneH,
+            pointerEvents: 'none',
+          }}>
+            <Lola3D
+              width={Math.round(sceneW * 0.42)}
+              height={sceneH}
+              lolaState={lolaState}
+              speaking={speaking}
+              listening={listening}
+              loading={loading}
+              audioElement={null}
+            />
+          </div>
 
           {/* Status bar flottante en haut */}
           <div style={{

@@ -11,6 +11,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.120.0",
     "@assistant-ui/react": "^0.15.16",
+    "@pixiv/three-vrm": "^3.5.5",
     "@react-three/drei": "^10.7.8",
     "@react-three/fiber": "^9.7.0",
     "elevenlabs": "^1.59.0",
@@ -20,6 +21,7 @@
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "react-dropzone": "^20.1.1",
+    "rhubarb-lip-sync-wasm": "^0.1.8",
     "simplex-noise": "^4.0.3",
     "three": "^0.185.1"
   },
