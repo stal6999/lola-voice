@@ -426,9 +426,9 @@ function MobileLayout({ winW, winH, screenContent, speaking, listening, loading,
   onToggleMute, muted, onFileClick, onCameraClick, fileReady,
   statusColor, statusLabel, chatEndRef }: any) {
 
-  const screenH = Math.round(winH * 0.28)
-  const chatH   = Math.round(winH * 0.32)
-  const btnBarH = 52
+  const screenH = Math.round(winH * 0.22)
+  const chatH   = Math.round(winH * 0.30)
+  const btnBarH = 56
   const lolaH   = winH - screenH - chatH - btnBarH
 
   return (
