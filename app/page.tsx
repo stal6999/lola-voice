@@ -5,6 +5,7 @@ import LolaV2 from '@/components/LolaV2'
 import LolaHome from '@/components/LolaHome'
 import MSDosTerminal from '@/components/MSDosTerminal'
 import DocNotification from '@/components/DocNotification'
+import { noise1d } from '@/hooks/useOrganicMotion'
 
 type Message = { role: 'user' | 'assistant'; content: string }
 type MouthState = 'closed' | 'half' | 'open'
@@ -65,31 +66,38 @@ export default function LolaPage() {
     return () => clearInterval(id)
   }, [])
 
-  // Breathing
+  // Breathing — géré par useOrganicMotion rAF ci-dessous
+
+  // Organic noise motion — remplace breath simple + micro-behaviours timer
   useEffect(() => {
     let frame: number
-    const s = Date.now()
-    const tick = () => { setBreathPhase(((Date.now()-s)/4200)%1); frame = requestAnimationFrame(tick) }
+    const t0 = Date.now()
+    const tick = () => {
+      const t = (Date.now() - t0) / 1000
+      // Multi-layer Perlin noise (arXiv 2025 — jamais parfaitement immobile)
+      const breathY   = noise1d(t / 4.5) * 2.0
+      const swayX     = noise1d(t / 10 + 10) * 1.2
+      const headT     = noise1d(t / 7 + 20) * 2.0 + noise1d(t / 3 + 30) * 0.8
+      const microX    = noise1d(t / 0.4 + 40) * 0.25
+      const eyeX      = noise1d(t / 6 + 60) * 1.5
+      const eyeY      = noise1d(t / 8 + 70) * 0.8
+
+      setBreathPhase(((t / 4.5) % 1))
+      setHeadTiltX(headT + swayX * 0.3)
+      setEyeShiftX(eyeX + microX)
+      setEyeShiftY(eyeY)
+
+      // Micro-expressions organiques — déclenchées par le noise
+      const noiseExp = noise1d(t / 15 + 100)
+      if (noiseExp > 0.85 && !speaking && !listening && !loading) setMicroExp('brow-raise')
+      else if (noiseExp > 0.6 && noiseExp < 0.8 && !speaking && !listening) setMicroExp('slight-smile')
+      else if (noiseExp < -0.8 && !speaking && !listening) setMicroExp('glance-screen')
+      else if (Math.abs(noiseExp) < 0.3) setMicroExp('none')
+
+      frame = requestAnimationFrame(tick)
+    }
     frame = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(frame)
-  }, [])
-
-  // Micro-behaviours — human idle
-  useEffect(() => {
-    const id = setInterval(() => {
-      if (speaking || listening || loading) return
-      const r = Math.random()
-      if (r < 0.2) {
-        setEyeShiftX(-2+Math.random()*4); setEyeShiftY(-1+Math.random()*2); setHeadTiltX(-1.5+Math.random()*3)
-        setTimeout(() => { setEyeShiftX(0); setEyeShiftY(0); setHeadTiltX(0) }, 1200+Math.random()*800)
-      } else if (r < 0.3) { setMicroExp('brow-raise'); setTimeout(() => setMicroExp('none'), 650) }
-      else if (r < 0.4) { setMicroExp('slight-smile'); setTimeout(() => setMicroExp('none'), 1000) }
-      else if (r < 0.5) {
-        setMicroExp('glance-screen'); setEyeShiftX(-3); setHeadTiltX(-2.5)
-        setTimeout(() => { setEyeShiftX(0); setHeadTiltX(0); setMicroExp('none') }, 1600)
-      }
-    }, 3500+Math.random()*2500)
-    return () => clearInterval(id)
   }, [speaking, listening, loading])
 
   function unlockAudio() {
