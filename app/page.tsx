@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
-import LolaV2 from '@/components/LolaV2'
+import LolaAvatarReal from '@/components/LolaAvatarReal'
 import LolaHome from '@/components/LolaHome'
 import MSDosTerminal from '@/components/MSDosTerminal'
 import DocNotification from '@/components/DocNotification'
@@ -242,7 +242,7 @@ export default function LolaPage() {
       <LolaHome width={winW} height={winH} screenContent={screenContent}
         audioActive={speaking} lolaEmotion={lolaEmotion} />
 
-      {/* ── LOLA — debout sur le sol, pas de lévitation ── */}
+      {/* ── LOLA — debout sur le sol ── */}
       <div style={{
         position: 'absolute',
         left: (winW - avatarW) / 2,
@@ -250,20 +250,14 @@ export default function LolaPage() {
         width: avatarW,
         pointerEvents: 'none',
         zIndex: 10,
-        // Breath subtil via transform, pas de float qui lève du sol
-        transform: `translateY(${Math.sin(breathPhase * Math.PI * 2) * 1.5}px)`,
       }}>
-        <LolaV2
-          mouthState={mouthState}
-          blinking={blinking}
+        <LolaAvatarReal
           expression={expression}
-          breathPhase={breathPhase}
-          headTiltX={headTiltX}
-          eyeShiftX={eyeShiftX}
-          eyeShiftY={eyeShiftY}
-          microExpression={microExp}
           speaking={speaking}
           listening={listening}
+          blinking={blinking}
+          breathPhase={breathPhase}
+          headTiltX={headTiltX}
           width={avatarW}
         />
       </div>
