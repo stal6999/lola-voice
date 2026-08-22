@@ -170,7 +170,7 @@ export default function LolaPage() {
   return (
     <div style={{ position: 'fixed', inset: 0, overflow: 'hidden', background: '#060310', touchAction: 'none' }}>
 
-      {/* ── DÉCOR + LOLA INTÉGRÉE DEDANS ── */}
+      {/* ── DÉCOR + LOLA style JT ── */}
       <LolaHome
         width={winW} height={winH}
         screenContent={screenContent}
@@ -186,6 +186,16 @@ export default function LolaPage() {
         microExpression={microExp}
         speaking={speaking}
         listening={listening}
+        statusText={
+          conversationMode
+            ? (muted ? 'Micro coupé — Lola attend' : listening ? 'Je vous écoute…' : speaking ? 'Lola répond' : loading ? 'Lola réfléchit…' : 'Conversation active')
+            : 'Bonjour Christophe — comment puis-je vous aider ?'
+        }
+        tickerMessages={[
+          messages.length > 0
+            ? `Dernier message : ${messages[messages.length - 1]?.content?.slice(0, 80)}…`
+            : 'Lola — Assistante IA personnelle • TC Expertise & Énergie • Belgique',
+        ]}
       />
 
       {/* ── STATUS BAR haut ── */}
