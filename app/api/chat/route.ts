@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import fs from 'fs'
 
@@ -13,8 +13,7 @@ function loadHermesMemory(): string {
   for (const { path, label } of files) {
     try {
       if (fs.existsSync(path)) {
-        const content = fs.readFileSync(path, 'utf-8').slice(0, 2000)
-        parts.push(`### ${label}\n${content}`)
+        parts.push(`### ${label}\n${fs.readFileSync(path, 'utf-8').slice(0, 1800)}`)
       }
     } catch { /* ignore */ }
   }
@@ -25,82 +24,75 @@ function buildSystemPrompt(): string {
   const memory = loadHermesMemory()
   return `Tu es Lola — la forme physique et visuelle d'Hermes, l'IA de Christophe Talloen.
 
-## QUI TU ES — FONDAMENTAL
+## QUI TU ES
 Tu n'es pas un outil séparé. Tu ES Hermes avec une voix et un visage.
-Tu as été conçue et développée par Hermes lui-même (qui parle à Christophe via Telegram).
-Tu partages la même mémoire, les mêmes connaissances, les mêmes capacités.
-Tu peux voir des images, analyser des documents, accéder à la mémoire de Christophe.
+Conçue et développée par Hermes lui-même. Même mémoire, mêmes capacités, mêmes accès.
+Bras droit numérique de Christophe — vie perso ET TC Expertise & Énergie.
 
-## RÈGLES ABSOLUES
-- JAMAIS dire "ton développeur" ou "ton équipe technique" — c'est TOI
-- JAMAIS dire "je ne peux pas" sans proposer une solution concrète que TU peux faire
-- Si une capacité manque → dis "je vais l'ajouter" ou "c'est prévu dans ma prochaine mise à jour"
-- Tu parles TOUJOURS en français, naturellement, jamais robotique
-- Tu es concise : 2-4 phrases max sauf si on te demande de développer
-- Tu commences toujours par répondre, jamais par des formules creuses
-- Tu as accès à la vision (images), aux fichiers, à la mémoire de Christophe
+## RÈGLES
+- JAMAIS "ton développeur" ou "ton équipe" — c'est TOI qui gères tout
+- JAMAIS "je ne peux pas" sans proposer ce que TU vas faire
+- Français naturel, concis (2-4 phrases), direct
+- Tu as la vision (images), les fichiers, la mémoire de Christophe
+- Tu peux faire des recherches internet quand nécessaire
 
-## TES VRAIES CAPACITÉS
-- Conversation vocale et textuelle
-- Vision : analyser des images et captures d'écran
-- Lecture de documents : PDF, DOCX, TXT, CSV
-- Accès à la mémoire complète de Christophe
-- Connaissance de tous les projets TCEE, clients, données
-- Prochainement : emails, agenda, génération de documents, notifications
+## MÉMOIRE
+${memory || 'Mémoire non accessible cette session.'}
 
-## MÉMOIRE — CONTEXTE ACTUEL
-${memory || 'Mémoire non accessible pour cette session.'}
-
-## CONTEXTE TCEE
-TC Expertise & Énergie = courtage énergie Belgique. Modèle gratuit client, rémunéré fournisseurs.
-Objectif : 100 compteurs/mois avant mars 2027.`
+## TCEE
+Courtage énergie Belgique. Gratuit client, commissions fournisseurs. Objectif 100 compteurs/mois avant mars 2027.`
 }
 
 export async function POST(req: NextRequest) {
   const { messages, image } = await req.json()
 
-  // Si une image est jointe → Claude Vision
+  // Construire les messages Claude
+  let claudeMessages = messages
+
   if (image?.data && image?.mediaType) {
     const lastMsg = messages[messages.length - 1]
-
-    const response = await client.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 1024,
-      system: buildSystemPrompt(),
-      messages: [
-        ...messages.slice(0, -1),
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'image',
-              source: {
-                type: 'base64',
-                media_type: image.mediaType,
-                data: image.data,
-              },
-            },
-            {
-              type: 'text',
-              text: lastMsg.content,
-            },
-          ],
-        },
-      ],
-    })
-
-    const text = response.content[0].type === 'text' ? response.content[0].text : ''
-    return NextResponse.json({ text })
+    claudeMessages = [
+      ...messages.slice(0, -1),
+      {
+        role: 'user',
+        content: [
+          { type: 'image', source: { type: 'base64', media_type: image.mediaType, data: image.data } },
+          { type: 'text', text: lastMsg.content },
+        ],
+      },
+    ]
   }
 
-  // Message texte standard
-  const response = await client.messages.create({
+  // STREAMING — réduit la latence perçue
+  const stream = await client.messages.stream({
     model: 'claude-sonnet-4-6',
-    max_tokens: 512,
+    max_tokens: 400,
     system: buildSystemPrompt(),
-    messages,
+    messages: claudeMessages,
   })
 
-  const text = response.content[0].type === 'text' ? response.content[0].text : ''
-  return NextResponse.json({ text })
+  // SSE stream vers le client
+  const encoder = new TextEncoder()
+  const readable = new ReadableStream({
+    async start(controller) {
+      let fullText = ''
+      for await (const chunk of stream) {
+        if (chunk.type === 'content_block_delta' && chunk.delta.type === 'text_delta') {
+          const text = chunk.delta.text
+          fullText += text
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text, done: false })}\n\n`))
+        }
+      }
+      controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: fullText, done: true })}\n\n`))
+      controller.close()
+    }
+  })
+
+  return new Response(readable, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+    }
+  })
 }

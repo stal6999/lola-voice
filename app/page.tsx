@@ -59,9 +59,31 @@ export default function LolaPage() {
     return () => window.removeEventListener('resize', set)
   }, [])
 
-  useEffect(() => { messagesRef.current = messages }, [messages])
+  // ── Unlock audio anticipé au premier touch/click ──
+  useEffect(() => {
+    const unlock = () => unlockAudio()
+    window.addEventListener('touchstart', unlock, { once: true })
+    window.addEventListener('click', unlock, { once: true })
+    return () => {
+      window.removeEventListener('touchstart', unlock)
+      window.removeEventListener('click', unlock)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   useEffect(() => { convModeRef.current = conversationMode }, [conversationMode])
   useEffect(() => { mutedRef.current = muted }, [muted])
+
+  // ── Unlock audio anticipé dès premier touch ──
+  useEffect(() => {
+    const unlock = () => unlockAudio()
+    window.addEventListener('touchstart', unlock, { once: true })
+    window.addEventListener('click', unlock, { once: true })
+    return () => {
+      window.removeEventListener('touchstart', unlock)
+      window.removeEventListener('click', unlock)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // ── Scroll chat ──
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
@@ -125,13 +147,40 @@ export default function LolaPage() {
     setMessages(history); setInput(''); setLiveTranscript('')
     setLoading(true); setExpression('thinking')
     try {
-      const res = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: history }) })
-      const data = await res.json()
-      const lolaMsg: Message = { role: 'assistant', content: data.text }
-      setMessages([...history, lolaMsg]); setLastResponse(data.text)
-      setLoading(false); setExpression('smiling')
-      setScreenContent(data.text)
-      playTTS(data.text)
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: history })
+      })
+      // Lecture SSE streaming
+      const reader = res.body!.getReader()
+      const decoder = new TextDecoder()
+      let fullText = ''
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        const lines = decoder.decode(value).split('\n')
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6))
+              if (data.done) {
+                // Réponse complète reçue
+                const lolaMsg: Message = { role: 'assistant', content: fullText }
+                setMessages([...history, lolaMsg])
+                setLastResponse(fullText)
+                setLoading(false); setExpression('smiling')
+                setScreenContent(fullText)
+                playTTS(fullText)
+              } else {
+                fullText += data.text
+                // Afficher en temps réel dans la zone conversation
+                setLastResponse(fullText)
+              }
+            } catch { /* ignore parse errors */ }
+          }
+        }
+      }
     } catch { setLoading(false); setExpression('neutral') }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
