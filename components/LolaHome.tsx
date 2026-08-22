@@ -37,45 +37,57 @@ export default function LolaHome({
       style={{ position: 'absolute', inset: 0 }}
       preserveAspectRatio="xMidYMid slice">
       <defs>
-        <radialGradient id="lh-sky" cx="50%" cy="30%" r="70%">
-          <stop offset="0%" stopColor="#1a0a2e" />
-          <stop offset="50%" stopColor="#0d0620" />
-          <stop offset="100%" stopColor="#060310" />
+        {/* Ciel lumineux — forêt enchantée diurne */}
+        <linearGradient id="lh-sky" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stopColor="#87ceeb" />
+          <stop offset="40%" stopColor="#b8e4f0" />
+          <stop offset="100%" stopColor="#d4f0c8" />
+        </linearGradient>
+        {/* Murs pierre claire — ambiance chaleureuse */}
+        <radialGradient id="lh-walls" cx="50%" cy="40%" r="75%">
+          <stop offset="0%" stopColor="#4a3520" />
+          <stop offset="50%" stopColor="#3a2a16" />
+          <stop offset="100%" stopColor="#28200e" />
         </radialGradient>
-        <radialGradient id="lh-walls" cx="50%" cy="60%" r="75%">
-          <stop offset="0%" stopColor="#2a1e0e" />
-          <stop offset="50%" stopColor="#1e1508" />
-          <stop offset="100%" stopColor="#120d04" />
-        </radialGradient>
+        {/* Lueur cheminée */}
         <radialGradient id="lh-fire-glow" cx="50%" cy="80%" r="60%">
-          <stop offset="0%" stopColor="rgba(255,140,40,0.3)" />
-          <stop offset="50%" stopColor="rgba(255,100,20,0.1)" />
+          <stop offset="0%" stopColor="rgba(255,180,60,0.4)" />
+          <stop offset="50%" stopColor="rgba(255,130,30,0.15)" />
           <stop offset="100%" stopColor="rgba(0,0,0,0)" />
         </radialGradient>
+        {/* Sol parquet miel */}
         <linearGradient id="lh-floor" x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" stopColor="#1e1206" />
-          <stop offset="100%" stopColor="#0e0900" />
+          <stop offset="0%" stopColor="#5a3c1a" />
+          <stop offset="100%" stopColor="#3a2510" />
         </linearGradient>
+        {/* Lianes */}
         <linearGradient id="lh-vine" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#2a5a20" />
-          <stop offset="100%" stopColor="#1a3a10" />
+          <stop offset="0%" stopColor="#3a7a20" />
+          <stop offset="100%" stopColor="#2a5a14" />
         </linearGradient>
+        {/* Étagère bois miel */}
         <linearGradient id="lh-shelf" x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" stopColor="#3a2010" />
-          <stop offset="100%" stopColor="#261408" />
+          <stop offset="0%" stopColor="#8b5e2a" />
+          <stop offset="100%" stopColor="#6b4818" />
         </linearGradient>
+        {/* Dôme verre */}
         <radialGradient id="lh-dome" cx="50%" cy="30%" r="60%">
-          <stop offset="0%" stopColor="rgba(200,230,255,0.04)" />
-          <stop offset="100%" stopColor="rgba(100,160,220,0.06)" />
+          <stop offset="0%" stopColor="rgba(180,230,255,0.12)" />
+          <stop offset="100%" stopColor="rgba(120,200,240,0.04)" />
         </radialGradient>
-
-        {/* Écran principal */}
+        {/* Écran vert Matrix */}
         <linearGradient id="lh-screen-bg" x1="0%" y1="0%" x2="5%" y2="100%">
-          <stop offset="0%" stopColor="#050e05" />
-          <stop offset="100%" stopColor="#020802" />
+          <stop offset="0%" stopColor="#040e04" />
+          <stop offset="100%" stopColor="#020602" />
         </linearGradient>
         <radialGradient id="lh-screen-glow" cx="50%" cy="50%" r="55%">
           <stop offset="0%" stopColor="rgba(0,200,80,0.12)" />
+          <stop offset="100%" stopColor="rgba(0,0,0,0)" />
+        </radialGradient>
+        {/* Lumière soleil qui filtre */}
+        <radialGradient id="lh-sunbeam" cx="60%" cy="10%" r="50%">
+          <stop offset="0%" stopColor="rgba(255,240,180,0.35)" />
+          <stop offset="60%" stopColor="rgba(255,220,120,0.08)" />
           <stop offset="100%" stopColor="rgba(0,0,0,0)" />
         </radialGradient>
 
@@ -83,17 +95,12 @@ export default function LolaHome({
           <feGaussianBlur stdDeviation="8" result="blur" />
           <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
         </filter>
-        <filter id="lh-glow-soft">
-          <feGaussianBlur stdDeviation="10" />
-        </filter>
-        <filter id="lh-bloom">
-          <feGaussianBlur stdDeviation="3" />
-        </filter>
-        <filter id="lh-screen-glow-filter">
+        <filter id="lh-glow-soft"><feGaussianBlur stdDeviation="10" /></filter>
+        <filter id="lh-bloom"><feGaussianBlur stdDeviation="3" /></filter>
+        <filter id="lh-glow-green">
           <feGaussianBlur stdDeviation="4" result="blur"/>
           <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
         </filter>
-
         <clipPath id="lh-dome-clip">
           <ellipse cx="200" cy="120" rx="170" ry="135" />
         </clipPath>
@@ -102,46 +109,37 @@ export default function LolaHome({
         </clipPath>
       </defs>
 
-      {/* ══ DÔME VERRE — forêt nocturne ══ */}
+      {/* ══ DÔME VERRE — forêt enchantée LUMINEUSE ══ */}
       <ellipse cx="200" cy="115" rx="175" ry="138" fill="url(#lh-sky)" />
+      <ellipse cx="200" cy="60" rx="175" ry="138" fill="url(#lh-sunbeam)" filter="url(#lh-glow-soft)" />
 
-      {/* Étoiles */}
-      {[
-        [75,28],[115,14],[158,7],[202,19],[242,11],[282,23],[318,17],[98,48],[262,43],
-        [138,33],[182,58],[228,52],[298,38],[68,68],[338,62],[152,23],[295,28],[73,43]
-      ].map(([x,y],i) => (
-        <circle key={`st${i}`} cx={x} cy={y} r={0.5 + (i%3)*0.4} fill="white" opacity={0.3 + (i%4)*0.12}>
-          <animate attributeName="opacity"
-            values={`${0.2+(i%3)*0.2};${0.6+(i%4)*0.2};${0.2+(i%3)*0.2}`}
-            dur={`${2.5+i*0.4}s`} repeatCount="indefinite" />
+      {/* Nuages */}
+      <ellipse cx="100" cy="45" rx="40" ry="14" fill="rgba(255,255,255,0.6)" />
+      <ellipse cx="85" cy="48" rx="26" ry="12" fill="rgba(255,255,255,0.55)" />
+      <ellipse cx="116" cy="47" rx="22" ry="10" fill="rgba(255,255,255,0.5)" />
+      <ellipse cx="285" cy="33" rx="34" ry="12" fill="rgba(255,255,255,0.55)" />
+      <ellipse cx="270" cy="37" rx="20" ry="10" fill="rgba(255,255,255,0.5)" />
+
+      {/* Forêt lumineuse verte */}
+      <path d="M 0,185 L 0,142 Q 12,95 22,112 Q 34,75 50,92 Q 60,58 76,75 Q 88,42 104,60 Q 116,35 132,55 Q 144,28 158,50 L 200,38 L 242,52 Q 256,30 270,48 Q 284,38 295,58 Q 310,47 322,66 Q 338,52 350,70 Q 364,58 376,78 Q 388,68 402,85 L 402,185 Z"
+        fill="#2d7a1a" opacity="0.92" />
+      <path d="M 0,228 Q 34,158 64,185 Q 85,148 115,172 Q 140,145 165,168 Q 185,140 210,160 Q 230,148 255,164 Q 275,145 300,168 Q 320,152 345,172 Q 370,158 402,178 L 402,228 Z"
+        fill="#3a9a22" opacity="0.88" />
+
+      {/* Lucioles dorées diurnes */}
+      {[62,138,218,308,82,192,268].map((x,i) => (
+        <circle key={`lc${i}`} cx={x} cy={88+(i%4)*16} r="2.5"
+          fill={i%2===0 ? '#ffe044' : '#ccff44'} opacity="0">
+          <animate attributeName="opacity" values="0;0.9;0;0;0.6;0"
+            dur={`${3.5+i*0.6}s`} begin={`${i*0.4}s`} repeatCount="indefinite" />
         </circle>
       ))}
-
-      {/* Lune */}
-      <circle cx="322" cy="38" r="17" fill="#ffe8b0" opacity="0.9" />
-      <circle cx="328" cy="36" r="15" fill="#1a0a2e" opacity="0.88" />
-      <circle cx="322" cy="38" r="24" fill="none" stroke="rgba(255,232,176,0.12)" strokeWidth="5" filter="url(#lh-glow-soft)" />
-
-      {/* Lucioles */}
-      {[58,118,178,248,318,82,212].map((x,i) => (
-        <circle key={`ff${i}`} cx={x} cy={128+(i%3)*18} r="1.5" fill="#aaff88" opacity="0">
-          <animate attributeName="opacity" values="0;0.9;0;0;0.5;0"
-            dur={`${3+i*0.7}s`} begin={`${i*0.5}s`} repeatCount="indefinite" />
-        </circle>
-      ))}
-
-      {/* Forêt silhouette fond */}
-      <path d="M 0,185 L 0,142 Q 10,102 20,112 Q 32,82 48,96 Q 58,62 73,78 Q 83,46 98,67 Q 112,42 128,60 Q 138,32 152,52 Q 163,27 178,48 L 202,40 L 228,50 Q 242,30 258,44 Q 270,24 282,42 Q 298,37 308,57 Q 322,47 333,64 Q 348,52 358,70 Q 372,60 382,80 Q 392,72 402,87 L 402,185 Z"
-        fill="#0a0518" opacity="0.96" />
-      {/* Arbres milieu */}
-      <path d="M 0,225 Q 32,162 62,188 Q 82,152 112,172 Q 138,148 162,168 Q 182,142 208,160 Q 228,150 252,164 Q 272,147 298,168 Q 318,154 342,172 Q 368,160 402,178 L 402,225 Z"
-        fill="#0d0720" opacity="0.82" />
 
       {/* Dôme verre */}
       <ellipse cx="200" cy="115" rx="175" ry="138" fill="url(#lh-dome)"
-        stroke="rgba(180,220,255,0.1)" strokeWidth="1.5" />
-      {/* Reflets dôme */}
-      <path d="M 80,42 Q 122,22 162,37" fill="none" stroke="rgba(200,230,255,0.07)" strokeWidth="3" />
+        stroke="rgba(200,240,255,0.18)" strokeWidth="1.5" />
+      <path d="M 82,42 Q 124,22 164,37" fill="none" stroke="rgba(255,255,255,0.22)" strokeWidth="3" />
+      <path d="M 92,72 Q 144,52 194,67" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="2" />
 
       {/* ══ MURS PIERRE ══ */}
       <rect x="0" y="225" width="400" height="475" fill="url(#lh-walls)" />
