@@ -3,7 +3,7 @@
 import { useRef, useEffect, useState, useCallback } from 'react'
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
-import { VRMLoaderPlugin, VRMUtils, type VRM } from '@pixiv/three-vrm'
+import { VRMLoaderPlugin, VRMUtils, type VRM, VRMHumanBoneName } from '@pixiv/three-vrm'
 import { createNoise3D } from 'simplex-noise'
 
 type LolaState = 'idle' | 'listening' | 'thinking' | 'speaking' | 'happy' | 'alert'
@@ -15,171 +15,126 @@ interface Lola3DProps {
   speaking?: boolean
   listening?: boolean
   loading?: boolean
-  audioElement?: HTMLAudioElement | null
   onReady?: () => void
 }
 
-// Shader nacré/iridescent — basé sur la recherche agents
-function createPearlSkinMaterial(): THREE.MeshPhysicalMaterial {
-  return new THREE.MeshPhysicalMaterial({
-    color: new THREE.Color(0x8ab4d4),      // bleu-gris nacré Lola
-    iridescence: 1.0,
-    iridescenceIOR: 1.5,
-    iridescenceThicknessRange: [100, 400],
-    transmission: 0.05,
-    thickness: 0.8,
-    attenuationColor: new THREE.Color(0x4488ff),
-    attenuationDistance: 2.0,
-    clearcoat: 0.4,
-    clearcoatRoughness: 0.1,
-    sheen: 0.5,
-    sheenColor: new THREE.Color(0x99ccff),
-    roughness: 0.2,
-    metalness: 0.05,
-    envMapIntensity: 1.5,
+function createPearlSkinMaterial(envMap: THREE.Texture | null): THREE.MeshPhysicalMaterial {
+  const m = new THREE.MeshPhysicalMaterial({
+    color: new THREE.Color(0xc8dff0),
+    iridescence: 0.9,
+    iridescenceIOR: 1.4,
+    iridescenceThicknessRange: [80, 350],
+    transmission: 0.04,
+    thickness: 0.6,
+    clearcoat: 0.3,
+    clearcoatRoughness: 0.15,
+    sheen: 0.4,
+    sheenColor: new THREE.Color(0x88bbee),
+    roughness: 0.25,
+    metalness: 0.02,
+    envMapIntensity: 1.2,
   })
+  if (envMap) m.envMap = envMap
+  return m
 }
 
-// Shader holographique pour les parties non-animées (corps, tenue)
-const holoVert = `
-varying vec3 vNormal;
-varying vec3 vViewDir;
-varying vec2 vUv;
-uniform float uTime;
-void main() {
-  vUv = uv;
-  vec3 worldNormal = normalize(mat3(modelMatrix) * normal);
-  vec3 worldPos = (modelMatrix * vec4(position, 1.0)).xyz;
-  vViewDir = normalize(cameraPosition - worldPos);
-  vNormal = worldNormal;
-  // Micro-déplacement organique
-  float noise = sin(position.y * 8.0 + uTime * 0.8) * 0.002;
-  vec3 displaced = position + normal * noise;
-  gl_Position = projectionMatrix * modelViewMatrix * vec4(displaced, 1.0);
-}
-`
+// Pose bras le long du corps
+function applyRestPose(vrm: VRM) {
+  const leftUpper = vrm.humanoid?.getNormalizedBoneNode(VRMHumanBoneName.LeftUpperArm)
+  const rightUpper = vrm.humanoid?.getNormalizedBoneNode(VRMHumanBoneName.RightUpperArm)
+  const leftLower = vrm.humanoid?.getNormalizedBoneNode(VRMHumanBoneName.LeftLowerArm)
+  const rightLower = vrm.humanoid?.getNormalizedBoneNode(VRMHumanBoneName.RightLowerArm)
+  const spine = vrm.humanoid?.getNormalizedBoneNode(VRMHumanBoneName.Spine)
 
-const holoFrag = `
-varying vec3 vNormal;
-varying vec3 vViewDir;
-varying vec2 vUv;
-uniform float uTime;
-uniform vec3 uColor;
-uniform float uAlpha;
-
-vec3 hsvToRgb(float h, float s, float v) {
-  vec4 K = vec4(1.0, 2.0/3.0, 1.0/3.0, 3.0);
-  vec3 p = abs(fract(vec3(h) + K.xyz) * 6.0 - K.www);
-  return v * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), s);
-}
-
-void main() {
-  float fresnel = pow(1.0 - max(dot(vNormal, vViewDir), 0.0), 2.5);
-  // Iridescence angle-dépendante
-  float angle = dot(vNormal, vViewDir);
-  float hue = angle * 0.4 + uTime * 0.05 + vUv.y * 0.3;
-  vec3 iriColor = hsvToRgb(hue, 0.6, 1.0);
-  // Scanlines subtiles
-  float scan = sin(vUv.y * 180.0 + uTime * 2.0) * 0.04 + 0.96;
-  vec3 finalColor = mix(uColor, iriColor, fresnel * 0.7) * scan;
-  float alpha = uAlpha * (0.6 + fresnel * 0.4);
-  gl_FragColor = vec4(finalColor, alpha);
-}
-`
-
-// Mapping phonèmes → morphTargets VRM (standard ARKit)
-const PHONEME_TO_VISEME: Record<string, string> = {
-  'A':  'aa', 'E': 'ee', 'I': 'ih', 'O': 'ou', 'U': 'ou',
-  'B':  'pp', 'M': 'pp', 'P': 'pp',
-  'C':  'ss', 'S': 'ss', 'Z': 'ss',
-  'D':  'dd', 'T': 'dd', 'N': 'nn', 'L': 'nn',
-  'F':  'ff', 'V': 'ff',
-  'G':  'kk', 'K': 'kk',
-  'TH': 'th', 'X': 'pp',
-  // ElevenLabs viseme IDs directs
-  'viseme_PP': 'pp', 'viseme_FF': 'ff', 'viseme_TH': 'th',
-  'viseme_DD': 'dd', 'viseme_kk': 'kk', 'viseme_CH': 'ch',
-  'viseme_SS': 'ss', 'viseme_nn': 'nn', 'viseme_RR': 'rr',
-  'viseme_aa': 'aa', 'viseme_E':  'ee', 'viseme_I':  'ih',
-  'viseme_O':  'ou', 'viseme_U':  'ou',
+  if (leftUpper)  leftUpper.rotation.set(0, 0,  1.1)  // bras gauche vers le bas
+  if (rightUpper) rightUpper.rotation.set(0, 0, -1.1)  // bras droit vers le bas
+  if (leftLower)  leftLower.rotation.set(0, 0,  0.15)
+  if (rightLower) rightLower.rotation.set(0, 0, -0.15)
+  if (spine)      spine.rotation.set(0, 0, 0)
 }
 
 export default function Lola3D({
   width, height, lolaState = 'idle',
   speaking = false, listening = false, loading = false,
-  audioElement = null, onReady,
+  onReady,
 }: Lola3DProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null)
   const sceneRef = useRef<THREE.Scene | null>(null)
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null)
   const vrmRef = useRef<VRM | null>(null)
-  const mixerRef = useRef<THREE.AnimationMixer | null>(null)
   const clockRef = useRef(new THREE.Clock())
   const noiseRef = useRef(createNoise3D())
   const frameRef = useRef<number>(0)
+  const lolaStateRef = useRef(lolaState)
+  const speakingRef = useRef(speaking)
   const [vrmLoaded, setVrmLoaded] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const holoUniformsRef = useRef<{ uTime: { value: number }; uColor: { value: THREE.Color }; uAlpha: { value: number } } | null>(null)
 
-  // Lerp morphTarget VRM
-  const lerpMorphTarget = useCallback((vrm: VRM, name: string, target: number, speed: number) => {
+  // Sync refs
+  useEffect(() => { lolaStateRef.current = lolaState }, [lolaState])
+  useEffect(() => { speakingRef.current = speaking }, [speaking])
+
+  const lerpMorph = useCallback((vrm: VRM, name: string, target: number, speed: number) => {
     try {
-      const current = vrm.expressionManager?.getValue(name as any) ?? 0
-      const next = THREE.MathUtils.lerp(current, target, speed)
-      vrm.expressionManager?.setValue(name as any, next)
-    } catch { /* ignore expressions inconnues */ }
+      const cur = vrm.expressionManager?.getValue(name as any) ?? 0
+      vrm.expressionManager?.setValue(name as any, THREE.MathUtils.lerp(cur, target, speed))
+    } catch { }
   }, [])
 
-  // Setup Three.js
   useEffect(() => {
     if (!canvasRef.current) return
     const canvas = canvasRef.current
 
-    // Renderer
+    // ── Renderer ──
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true })
     renderer.setSize(width, height)
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     renderer.outputColorSpace = THREE.SRGBColorSpace
     renderer.toneMapping = THREE.ACESFilmicToneMapping
-    renderer.toneMappingExposure = 1.2
+    renderer.toneMappingExposure = 1.3
+    renderer.shadowMap.enabled = true
     rendererRef.current = renderer
 
-    // Scene
+    // ── Scene ──
     const scene = new THREE.Scene()
     sceneRef.current = scene
 
-    // Camera — portrait, cadrage mi-corps légèrement décalé
-    const camera = new THREE.PerspectiveCamera(28, width / height, 0.1, 100)
-    camera.position.set(0, 1.15, 2.8)
-    camera.lookAt(0, 1.0, 0)
+    // ── Camera ── portrait, mi-corps, face à Lola
+    // Lola VRM debout → hauteur ~1.7m, on cadre de y=0 à y=1.9
+    // Camera à z=2.2, regardant y=0.9 (centre torse/tête)
+    const camera = new THREE.PerspectiveCamera(30, width / height, 0.1, 50)
+    camera.position.set(0, 0.95, 2.2)
+    camera.lookAt(0, 0.95, 0)
     cameraRef.current = camera
 
-    // Lumières
-    const ambient = new THREE.AmbientLight(0xc8d8f8, 0.8)
+    // ── Lumières ──
+    const ambient = new THREE.AmbientLight(0xd0e8ff, 0.7)
     scene.add(ambient)
-    const keyLight = new THREE.DirectionalLight(0xffeedd, 1.4)
-    keyLight.position.set(1.5, 3, 2)
-    scene.add(keyLight)
-    const fillLight = new THREE.DirectionalLight(0xaaccff, 0.6)
-    fillLight.position.set(-2, 2, 1)
-    scene.add(fillLight)
-    const rimLight = new THREE.DirectionalLight(0x80c8ff, 0.8)
-    rimLight.position.set(0, 2, -3)
-    scene.add(rimLight)
 
-    // Env map pour les reflets nacrés — sky simple
+    const key = new THREE.DirectionalLight(0xfff5e0, 1.6)
+    key.position.set(1.5, 3.5, 2.5)
+    key.castShadow = true
+    scene.add(key)
+
+    const fill = new THREE.DirectionalLight(0xaaccff, 0.5)
+    fill.position.set(-2, 2, 1)
+    scene.add(fill)
+
+    const rim = new THREE.DirectionalLight(0x80ccff, 0.7)
+    rim.position.set(0, 2.5, -2.5)
+    scene.add(rim)
+
+    // ── Env map ──
     const pmrem = new THREE.PMREMGenerator(renderer)
     pmrem.compileEquirectangularShader()
-    const neutralEnv = pmrem.fromScene(new THREE.Scene(), 0.04)
-    scene.environment = neutralEnv.texture
+    const envTex = pmrem.fromScene(new THREE.Scene(), 0.04).texture
+    scene.environment = envTex
     pmrem.dispose()
 
-    // Charger le modèle VRM
+    // ── Charger VRM ──
     const loader = new GLTFLoader()
-    loader.register(parser => new VRMLoaderPlugin(parser))
+    loader.register(p => new VRMLoaderPlugin(p))
 
-    // Essayer de charger un modèle VRM depuis le public folder
     loader.load(
       '/lola.vrm',
       (gltf) => {
@@ -187,164 +142,165 @@ export default function Lola3D({
         VRMUtils.combineMorphs(vrm)
         VRMUtils.removeUnnecessaryVertices(vrm.scene)
 
-        // Appliquer le shader nacré/iridescent sur la peau
-        const pearlMat = createPearlSkinMaterial()
-        pearlMat.envMap = scene.environment
+        // VRM1.0 fait face à +Z par défaut → caméra à +Z → elle nous regarde
+        // PAS de rotation.y = Math.PI ici (bug précédent)
+        vrm.scene.position.set(0, 0, 0)
 
+        // Appliquer shader nacré sur la peau
+        const pearlMat = createPearlSkinMaterial(envTex)
         vrm.scene.traverse(obj => {
-          if (obj instanceof THREE.SkinnedMesh) {
-            const mat = obj.material
-            if (Array.isArray(mat)) {
-              obj.material = mat.map(m => {
-                if (m.name?.toLowerCase().includes('skin') ||
-                    m.name?.toLowerCase().includes('face') ||
-                    m.name?.toLowerCase().includes('body')) {
-                  const p = pearlMat.clone()
-                  ;(p as any).morphTargets = true
-                  ;(p as any).morphNormals = true
-                  return p
-                }
-                return m
-              })
-            } else if (mat.name?.toLowerCase().includes('skin') ||
-                       mat.name?.toLowerCase().includes('face')) {
+          if (!(obj instanceof THREE.SkinnedMesh)) return
+          const mats = Array.isArray(obj.material) ? obj.material : [obj.material]
+          const newMats = mats.map((m: THREE.Material) => {
+            const name = m.name?.toLowerCase() ?? ''
+            if (name.includes('skin') || name.includes('face') ||
+                name.includes('body') || name.includes('head')) {
               const p = pearlMat.clone()
               ;(p as any).morphTargets = true
               ;(p as any).morphNormals = true
-              obj.material = p
+              return p
             }
-          }
+            return m
+          })
+          obj.material = Array.isArray(obj.material) ? newMats : newMats[0]
+          obj.castShadow = true
         })
 
-        // Shader holographique sur la tenue
-        const holoUniforms = {
-          uTime: { value: 0 },
-          uColor: { value: new THREE.Color(0x9ab4cc) },
-          uAlpha: { value: 0.9 },
-        }
-        holoUniformsRef.current = holoUniforms
-        const holoMat = new THREE.ShaderMaterial({
-          vertexShader: holoVert,
-          fragmentShader: holoFrag,
-          uniforms: holoUniforms,
-          transparent: true,
-          side: THREE.DoubleSide,
-        })
-
-        vrm.scene.traverse(obj => {
-          if (obj instanceof THREE.Mesh) {
-            const mat = obj.material as THREE.Material
-            if (mat.name?.toLowerCase().includes('cloth') ||
-                mat.name?.toLowerCase().includes('outfit') ||
-                mat.name?.toLowerCase().includes('dress')) {
-              obj.material = holoMat
-            }
-          }
-        })
-
-        // Positionner — debout, centré
-        vrm.scene.rotation.y = Math.PI
         scene.add(vrm.scene)
         vrmRef.current = vrm
 
-        // Mixer animations
-        const mixer = new THREE.AnimationMixer(vrm.scene)
-        mixerRef.current = mixer
+        // Appliquer pose repos immédiatement
+        applyRestPose(vrm)
+        vrm.update(0)
 
         setVrmLoaded(true)
         onReady?.()
       },
       undefined,
       (err) => {
-        console.warn('VRM non trouvé, utilisation avatar procédural:', err)
-        setError('no-vrm')
-        // Créer un avatar procédural en fallback
-        createProceduralAvatar(scene, holoUniformsRef)
+        console.warn('VRM load error:', err)
+        // Fallback simple — sphère nacrée
+        const geo = new THREE.SphereGeometry(0.3, 32, 32)
+        const mat = createPearlSkinMaterial(envTex)
+        const mesh = new THREE.Mesh(geo, mat)
+        mesh.position.set(0, 1.0, 0)
+        scene.add(mesh)
         setVrmLoaded(true)
         onReady?.()
       }
     )
 
-    // Boucle de rendu
+    // ── Boucle animation ──
+    const noise3D = noiseRef.current
+    let lastBlink = 0
+    let blinkInterval = 3.5
+    let blinking = false
+    let blinkProgress = 0
+
     const animate = () => {
       frameRef.current = requestAnimationFrame(animate)
-      const delta = clockRef.current.getDelta()
-      const elapsed = clockRef.current.getElapsedTime()
-      const noise3D = noiseRef.current
-
-      // Update uniforms holo
-      if (holoUniformsRef.current) {
-        holoUniformsRef.current.uTime.value = elapsed
-      }
+      const delta = Math.min(clockRef.current.getDelta(), 0.05)
+      const t = clockRef.current.getElapsedTime()
+      const state = lolaStateRef.current
+      const isSpeaking = speakingRef.current
 
       if (vrmRef.current) {
         const vrm = vrmRef.current
-        mixerRef.current?.update(delta)
 
-        // ── ANIMATIONS ORGANIQUES PERLIN NOISE ──
-        const head = vrm.humanoid?.getNormalizedBoneNode('head')
-        const spine = vrm.humanoid?.getNormalizedBoneNode('spine')
-        const leftArm = vrm.humanoid?.getNormalizedBoneNode('leftUpperArm')
-        const rightArm = vrm.humanoid?.getNormalizedBoneNode('rightUpperArm')
+        const head  = vrm.humanoid?.getNormalizedBoneNode(VRMHumanBoneName.Head)
+        const neck  = vrm.humanoid?.getNormalizedBoneNode(VRMHumanBoneName.Neck)
+        const spine = vrm.humanoid?.getNormalizedBoneNode(VRMHumanBoneName.Spine)
+        const lArm  = vrm.humanoid?.getNormalizedBoneNode(VRMHumanBoneName.LeftUpperArm)
+        const rArm  = vrm.humanoid?.getNormalizedBoneNode(VRMHumanBoneName.RightUpperArm)
+        const lLow  = vrm.humanoid?.getNormalizedBoneNode(VRMHumanBoneName.LeftLowerArm)
+        const rLow  = vrm.humanoid?.getNormalizedBoneNode(VRMHumanBoneName.RightLowerArm)
+
+        // ── Micro-animations Perlin ── toujours actives
+        const breath = noise3D(t * 0.35, 0, 0) * 0.006
+        if (spine) spine.rotation.z = breath * 0.4
 
         if (head) {
-          head.rotation.y = noise3D(elapsed * 0.15, 10, 0) * 0.03
-          head.rotation.x = noise3D(elapsed * 0.22, 20, 0) * 0.02
-          head.rotation.z = noise3D(elapsed * 0.18, 30, 0) * 0.01
+          head.rotation.y = noise3D(t * 0.12, 10, 0) * 0.04
+          head.rotation.x = noise3D(t * 0.18, 20, 0) * 0.025 + 0.03
+          head.rotation.z = noise3D(t * 0.15, 30, 0) * 0.015
         }
-        if (spine) {
-          const breath = noise3D(elapsed * 0.4, 0, 0) * 0.008
-          spine.rotation.z = breath * 0.5
+        if (neck) {
+          neck.rotation.y = noise3D(t * 0.1, 40, 0) * 0.02
         }
 
-        // Comportement selon état
-        switch (lolaState) {
+        // ── Comportement selon état ──
+        switch (state) {
           case 'idle':
-            if (leftArm) leftArm.rotation.z = noise3D(elapsed * 0.1, 50, 0) * 0.02 - 0.05
-            if (rightArm) rightArm.rotation.z = noise3D(elapsed * 0.12, 60, 0) * 0.02 + 0.05
-            lerpMorphTarget(vrm, 'neutral', 0.8, delta * 2)
+            // Bras le long du corps avec légère oscillation
+            if (lArm) lArm.rotation.set(0.05, 0, 1.1 + noise3D(t*0.08, 50, 0)*0.03)
+            if (rArm) rArm.rotation.set(0.05, 0, -1.1 - noise3D(t*0.09, 60, 0)*0.03)
+            if (lLow) lLow.rotation.set(0, 0, 0.1)
+            if (rLow) rLow.rotation.set(0, 0, -0.1)
+            lerpMorph(vrm, 'neutral', 0.6, delta * 2)
+            lerpMorph(vrm, 'happy', 0, delta * 2)
             break
+
           case 'listening':
-            if (head) {
-              head.rotation.x = Math.sin(elapsed * 0.3) * 0.03 + 0.05
-            }
-            lerpMorphTarget(vrm, 'surprised', 0.2, delta * 3)
+            // Légère inclinaison tête vers l'avant
+            if (head) head.rotation.x = 0.08 + noise3D(t*0.2, 20, 0)*0.02
+            if (lArm) lArm.rotation.set(0, 0, 1.1)
+            if (rArm) rArm.rotation.set(0, 0, -1.1)
+            lerpMorph(vrm, 'surprised', 0.15, delta * 3)
             break
+
           case 'thinking':
-            if (rightArm) {
-              rightArm.rotation.x = THREE.MathUtils.lerp(rightArm.rotation.x, -0.8, delta * 2)
-              rightArm.rotation.z = THREE.MathUtils.lerp(rightArm.rotation.z, -0.4, delta * 2)
-            }
-            lerpMorphTarget(vrm, 'thinking', 0.5, delta * 2)
+            // Bras droit légèrement levé, tête inclinée
+            if (rArm) rArm.rotation.set(-0.3, 0, -0.7)
+            if (rLow) rLow.rotation.set(-0.4, 0, -0.2)
+            if (head) head.rotation.z = -0.05
+            if (lArm) lArm.rotation.set(0, 0, 1.1)
+            lerpMorph(vrm, 'neutral', 0.4, delta * 2)
             break
+
           case 'speaking':
-            if (leftArm) {
-              const gestureT = Math.sin(elapsed * 2.0) * 0.15
-              leftArm.rotation.z = -gestureT - 0.3
-            }
-            lerpMorphTarget(vrm, 'happy', 0.3, delta * 4)
+            // Bras gauche légèrement levé — geste naturel
+            const gesture = Math.sin(t * 1.8) * 0.12
+            if (lArm) lArm.rotation.set(-gesture * 0.3, 0, 0.85 + gesture)
+            if (rArm) rArm.rotation.set(0, 0, -1.1)
+            lerpMorph(vrm, 'happy', 0.25, delta * 4)
             break
+
           case 'happy':
-            lerpMorphTarget(vrm, 'happy', 1.0, delta * 3)
+            if (lArm) lArm.rotation.set(-0.2, 0, 0.9)
+            if (rArm) rArm.rotation.set(-0.2, 0, -0.9)
+            lerpMorph(vrm, 'happy', 0.9, delta * 3)
             break
         }
 
-        // Lip-sync depuis audio
-        if (audioElement && speaking) {
-          // Fallback : animation bouche rythmique si pas de données phonèmes
-          const mouthOpen = Math.max(0, Math.sin(elapsed * 8) * 0.5 + 0.2)
-          lerpMorphTarget(vrm, 'aa', mouthOpen * 0.6, 0.3)
-          lerpMorphTarget(vrm, 'ou', mouthOpen * 0.3, 0.3)
+        // ── Lip-sync ──
+        if (isSpeaking) {
+          const mouthOpen = Math.max(0, Math.sin(t * 9) * 0.45 + 0.15)
+          lerpMorph(vrm, 'aa', mouthOpen, 0.35)
+          lerpMorph(vrm, 'ou', mouthOpen * 0.3, 0.25)
         } else {
-          lerpMorphTarget(vrm, 'aa', 0, 0.15)
-          lerpMorphTarget(vrm, 'ou', 0, 0.15)
+          lerpMorph(vrm, 'aa', 0, 0.2)
+          lerpMorph(vrm, 'ou', 0, 0.2)
         }
 
-        // Clignements naturels
-        const blinkCycle = Math.sin(elapsed * 0.7) > 0.95
-        const blinkValue = blinkCycle ? 1.0 : 0.0
-        lerpMorphTarget(vrm, 'blinkLeft', blinkValue, 0.5)
-        lerpMorphTarget(vrm, 'blinkRight', blinkValue, 0.5)
+        // ── Clignements naturels ──
+        if (t - lastBlink > blinkInterval) {
+          blinking = true
+          blinkProgress = 0
+          lastBlink = t
+          blinkInterval = 2.8 + noise3D(t * 0.05, 200, 0) * 1.8
+        }
+        if (blinking) {
+          blinkProgress += delta * 8
+          const bv = blinkProgress < 1
+            ? blinkProgress
+            : Math.max(0, 2 - blinkProgress)
+          lerpMorph(vrm, 'blinkLeft', bv, 0.8)
+          lerpMorph(vrm, 'blinkRight', bv, 0.8)
+          if (blinkProgress > 2) { blinking = false }
+        } else {
+          lerpMorph(vrm, 'blinkLeft', 0, 0.3)
+          lerpMorph(vrm, 'blinkRight', 0, 0.3)
+        }
 
         vrm.update(delta)
       }
@@ -360,11 +316,6 @@ export default function Lola3D({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Réagir aux changements d'état
-  useEffect(() => {
-    // Les changements sont gérés dans la boucle animate via lolaState
-  }, [lolaState, speaking, listening, loading])
-
   // Resize
   useEffect(() => {
     if (!rendererRef.current || !cameraRef.current) return
@@ -375,185 +326,26 @@ export default function Lola3D({
 
   return (
     <div style={{ position: 'relative', width, height }}>
-      <canvas
-        ref={canvasRef}
-        style={{ display: 'block', width: '100%', height: '100%' }}
-      />
+      <canvas ref={canvasRef} style={{ display: 'block', width: '100%', height: '100%' }} />
       {!vrmLoaded && (
         <div style={{
           position: 'absolute', inset: 0,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          flexDirection: 'column', gap: 12,
-          background: 'rgba(10,15,30,0.6)', backdropFilter: 'blur(4px)',
+          flexDirection: 'column', gap: 10,
         }}>
           <div style={{
-            width: 40, height: 40, borderRadius: '50%',
-            border: '2px solid rgba(140,180,255,0.2)',
-            borderTop: '2px solid rgba(140,180,255,0.8)',
-            animation: 'spin 1s linear infinite',
-          }} />
-          <span style={{ color: 'rgba(140,180,255,0.6)', fontFamily: 'monospace', fontSize: 11, letterSpacing: 2 }}>
-            LOLA INIT...
-          </span>
+            width: 36, height: 36, borderRadius: '50%',
+            border: '2px solid rgba(140,190,255,0.15)',
+            borderTop: '2px solid rgba(140,190,255,0.7)',
+            animation: 'spin3d 1s linear infinite',
+          }}/>
+          <span style={{
+            color: 'rgba(140,190,255,0.5)',
+            fontFamily: 'monospace', fontSize: 10, letterSpacing: 2
+          }}>LOLA INIT</span>
         </div>
       )}
-      <style>{`
-        @keyframes spin { to { transform: rotate(360deg) } }
-      `}</style>
+      <style>{`@keyframes spin3d { to { transform: rotate(360deg) } }`}</style>
     </div>
   )
-}
-
-// Avatar procédural fallback (si pas de fichier VRM)
-function createProceduralAvatar(
-  scene: THREE.Scene,
-  holoRef: React.MutableRefObject<any>
-) {
-  const group = new THREE.Group()
-
-  const pearlMat = createPearlSkinMaterial()
-
-  const holoUniforms = {
-    uTime: { value: 0 },
-    uColor: { value: new THREE.Color(0x8ab4d8) },
-    uAlpha: { value: 0.85 },
-  }
-  holoRef.current = holoUniforms
-  const holoMat = new THREE.ShaderMaterial({
-    vertexShader: holoVert,
-    fragmentShader: holoFrag,
-    uniforms: holoUniforms,
-    transparent: true,
-    side: THREE.DoubleSide,
-  })
-
-  // Tête sphère nacrée légèrement ovale
-  const headGeo = new THREE.SphereGeometry(0.14, 32, 24)
-  headGeo.scale(1, 1.08, 0.92) // légèrement elfique
-  const head = new THREE.Mesh(headGeo, pearlMat)
-  head.position.set(0, 1.65, 0)
-  group.add(head)
-
-  // Yeux lumineux ambre
-  const eyeGeo = new THREE.SphereGeometry(0.028, 16, 16)
-  const eyeMat = new THREE.MeshStandardMaterial({
-    color: 0xe8c840, emissive: 0xd4a020, emissiveIntensity: 0.6,
-    roughness: 0.1, metalness: 0.3,
-  })
-  const eyeL = new THREE.Mesh(eyeGeo, eyeMat)
-  const eyeR = new THREE.Mesh(eyeGeo, eyeMat)
-  eyeL.position.set(-0.055, 1.665, 0.125)
-  eyeR.position.set( 0.055, 1.665, 0.125)
-  group.add(eyeL, eyeR)
-
-  // Lueur yeux
-  const glowGeo = new THREE.SphereGeometry(0.035, 8, 8)
-  const glowMat = new THREE.MeshBasicMaterial({ color: 0xe8d060, transparent: true, opacity: 0.15 })
-  const glowL = new THREE.Mesh(glowGeo, glowMat)
-  const glowR = new THREE.Mesh(glowGeo, glowMat)
-  glowL.position.copy(eyeL.position)
-  glowR.position.copy(eyeR.position)
-  group.add(glowL, glowR)
-
-  // Corps élancé
-  const bodyGeo = new THREE.CapsuleGeometry(0.11, 0.42, 8, 16)
-  const body = new THREE.Mesh(bodyGeo, holoMat)
-  body.position.set(0, 1.22, 0)
-  group.add(body)
-
-  // Cou
-  const neckGeo = new THREE.CylinderGeometry(0.05, 0.06, 0.1, 12)
-  const neck = new THREE.Mesh(neckGeo, pearlMat)
-  neck.position.set(0, 1.51, 0)
-  group.add(neck)
-
-  // Cheveux — mèches élancées noires
-  const hairMat = new THREE.MeshStandardMaterial({
-    color: 0x080810, roughness: 0.6, metalness: 0.1,
-    emissive: 0x1a2060, emissiveIntensity: 0.15,
-  })
-  const hairPositions: [number, number, number, number, number][] = [
-    [-0.08, 1.78, -0.04, -0.14, 1.38],
-    [ 0.08, 1.78, -0.04,  0.14, 1.38],
-    [-0.05, 1.79,  0.02, -0.06, 1.36],
-    [ 0.05, 1.79,  0.02,  0.06, 1.36],
-    [ 0.00, 1.80, -0.06, -0.02, 1.35],
-  ]
-  hairPositions.forEach(([x1, y1, z1, x2, y2]) => {
-    const curve = new THREE.CatmullRomCurve3([
-      new THREE.Vector3(x1, y1, z1),
-      new THREE.Vector3(x2 * 1.2, (y1 + y2) / 2, z1 - 0.02),
-      new THREE.Vector3(x2, y2, z1 - 0.05),
-    ])
-    const pts = curve.getPoints(8)
-    const g = new THREE.TubeGeometry(
-      new THREE.CatmullRomCurve3(pts), 8, 0.012, 6, false
-    )
-    group.add(new THREE.Mesh(g, hairMat))
-  })
-
-  // Jambes
-  const legGeo = new THREE.CapsuleGeometry(0.05, 0.36, 6, 12)
-  const legMat = new THREE.MeshStandardMaterial({ color: 0x1e2840, roughness: 0.7 })
-  const legL = new THREE.Mesh(legGeo, legMat)
-  const legR = new THREE.Mesh(legGeo, legMat)
-  legL.position.set(-0.06, 0.82, 0)
-  legR.position.set( 0.06, 0.82, 0)
-  group.add(legL, legR)
-
-  // Pieds (chaussons nacrés)
-  const footGeo = new THREE.CapsuleGeometry(0.04, 0.08, 4, 8)
-  footGeo.rotateX(Math.PI / 2)
-  const footMat = new THREE.MeshPhysicalMaterial({
-    color: 0xd4c080, metalness: 0.4, roughness: 0.2,
-    iridescence: 0.5, iridescenceIOR: 1.4,
-  })
-  const footL = new THREE.Mesh(footGeo, footMat)
-  const footR = new THREE.Mesh(footGeo, footMat)
-  footL.position.set(-0.06, 0.62, 0.04)
-  footR.position.set( 0.06, 0.62, 0.04)
-  group.add(footL, footR)
-
-  // Bras
-  const armGeo = new THREE.CapsuleGeometry(0.04, 0.28, 6, 10)
-  const armMat = holoMat
-  const armL = new THREE.Mesh(armGeo, armMat)
-  const armR = new THREE.Mesh(armGeo, armMat)
-  armL.position.set(-0.18, 1.22, 0)
-  armL.rotation.z = 0.3
-  armR.position.set( 0.18, 1.22, 0)
-  armR.rotation.z = -0.3
-  group.add(armL, armR)
-
-  // Mains
-  const handGeo = new THREE.SphereGeometry(0.045, 8, 8)
-  const handL = new THREE.Mesh(handGeo, pearlMat)
-  const handR = new THREE.Mesh(handGeo, pearlMat)
-  handL.position.set(-0.26, 1.08, 0)
-  handR.position.set( 0.26, 1.08, 0)
-  group.add(handL, handR)
-
-  // Pendentif cristal cyan
-  const crystalGeo = new THREE.OctahedronGeometry(0.025, 0)
-  const crystalMat = new THREE.MeshPhysicalMaterial({
-    color: 0x40c8ff, emissive: 0x2080d0, emissiveIntensity: 0.8,
-    transmission: 0.6, roughness: 0.0, metalness: 0.1,
-    iridescence: 0.8,
-  })
-  const crystal = new THREE.Mesh(crystalGeo, crystalMat)
-  crystal.position.set(0, 1.52, 0.1)
-  group.add(crystal)
-
-  // Aura subtile
-  const auraGeo = new THREE.SphereGeometry(0.22, 16, 16)
-  const auraMat = new THREE.MeshBasicMaterial({
-    color: 0x6090d0, transparent: true, opacity: 0.04,
-    side: THREE.BackSide,
-  })
-  const aura = new THREE.Mesh(auraGeo, auraMat)
-  aura.position.set(0, 1.65, 0)
-  group.add(aura)
-
-  scene.add(group)
-  return group
 }

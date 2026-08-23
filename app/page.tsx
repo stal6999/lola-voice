@@ -428,9 +428,9 @@ function PCLayout({ winW, winH, screenContent, speaking, listening, loading, lol
       {/* ── ZONE PRINCIPALE DROITE ── */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
 
-        {/* SCÈNE — décor + Lola 3D */}
+        {/* SCÈNE — décor SVG fond + Lola 3D centrée */}
         <div style={{ width: sceneW, height: sceneH, position: 'relative', overflow: 'hidden' }}>
-          {/* Décor SVG en fond */}
+          {/* Décor SVG en fond — sans l'ancienne Lola SVG */}
           <LolaScene
             width={sceneW} height={sceneH}
             screenContent={screenContent}
@@ -441,22 +441,22 @@ function PCLayout({ winW, winH, screenContent, speaking, listening, loading, lol
             eyeShiftX={eyeShiftX} eyeShiftY={eyeShiftY}
             microExpression={microExpression}
           />
-          {/* Lola 3D par-dessus, côté droit */}
+          {/* Lola 3D VRM — centrée, corps entier */}
           <div style={{
             position: 'absolute',
-            right: 0, bottom: 0,
-            width: Math.round(sceneW * 0.42),
+            left: '50%', bottom: 0,
+            transform: 'translateX(-50%)',
+            width: Math.round(sceneH * 0.55),
             height: sceneH,
             pointerEvents: 'none',
           }}>
             <Lola3D
-              width={Math.round(sceneW * 0.42)}
+              width={Math.round(sceneH * 0.55)}
               height={sceneH}
               lolaState={lolaState}
               speaking={speaking}
               listening={listening}
               loading={loading}
-              audioElement={null}
             />
           </div>
 
