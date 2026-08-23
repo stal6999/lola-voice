@@ -375,9 +375,11 @@ function PCLayout({ winW, winH, screenContent, speaking, listening, loading, lol
   statusColor, statusLabel, showChat, setShowChat, chatEndRef }: any) {
 
   const sidebarW = 64
-  const chatH = 220
+  // Scène = toute la hauteur — plus de chatH fixe qui gaspille l'espace
   const sceneW = winW - sidebarW
-  const sceneH = winH - chatH
+  const sceneH = winH
+  // Chat en overlay en bas de la scène
+  const chatOverlayH = 200
 
   return (
     <div style={{ display: 'flex', width: winW, height: winH }}>
@@ -426,7 +428,7 @@ function PCLayout({ winW, winH, screenContent, speaking, listening, loading, lol
       </div>
 
       {/* ── ZONE PRINCIPALE DROITE ── */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+      <div style={{ flex: 1, position: 'relative', height: winH, overflow: 'hidden' }}>
 
         {/* SCÈNE — décor SVG fond + Lola 3D centrée */}
         <div style={{ width: sceneW, height: sceneH, position: 'relative', overflow: 'hidden' }}>
@@ -479,8 +481,8 @@ function PCLayout({ winW, winH, screenContent, speaking, listening, loading, lol
           )}
         </div>
 
-        {/* ZONE CONVERSATION BAS */}
-        <div style={{ height: chatH, background: 'rgba(4,3,1,0.97)', borderTop: '1px solid rgba(255,255,255,0.05)', display: 'flex', flexDirection: 'column' }}>
+        {/* ZONE CONVERSATION — overlay en bas de la scène */}
+        <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: chatOverlayH, background: 'rgba(4,3,1,0.88)', backdropFilter: 'blur(16px)', borderTop: '1px solid rgba(255,255,255,0.05)', display: 'flex', flexDirection: 'column', zIndex: 30 }}>
 
           {/* Messages */}
           <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 6 }}>

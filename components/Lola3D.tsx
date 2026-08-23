@@ -100,11 +100,11 @@ export default function Lola3D({
     sceneRef.current = scene
 
     // ── Camera ── portrait, mi-corps, face à Lola
-    // Lola VRM debout → hauteur ~1.7m, on cadre de y=0 à y=1.9
-    // Camera à z=2.2, regardant y=0.9 (centre torse/tête)
-    const camera = new THREE.PerspectiveCamera(30, width / height, 0.1, 50)
-    camera.position.set(0, 0.95, 2.2)
-    camera.lookAt(0, 0.95, 0)
+    // Calcul précis : Lola=1.88m, fov=45° → z=2.77 → visible 0→2.29m
+    // cam_y=1.15 → pieds (y=0) en bas, tête (y=1.88) à 82% en haut
+    const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 50)
+    camera.position.set(0, 1.15, 2.77)
+    camera.lookAt(0, 1.15, 0)
     cameraRef.current = camera
 
     // ── Lumières ──
