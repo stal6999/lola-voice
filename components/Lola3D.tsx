@@ -58,10 +58,10 @@ function applyRestPose(vrm: VRM) {
   const rightLower = vrm.humanoid?.getNormalizedBoneNode(VRMHumanBoneName.RightLowerArm)
   const spine = vrm.humanoid?.getNormalizedBoneNode(VRMHumanBoneName.Spine)
 
-  if (leftUpper)  leftUpper.rotation.set(0, 0,  1.1)  // bras gauche vers le bas
-  if (rightUpper) rightUpper.rotation.set(0, 0, -1.1)  // bras droit vers le bas
-  if (leftLower)  leftLower.rotation.set(0, 0,  0.15)
-  if (rightLower) rightLower.rotation.set(0, 0, -0.15)
+  if (leftUpper)  leftUpper.rotation.set(0, 0, -1.1)  // z négatif = bras gauche vers le BAS
+  if (rightUpper) rightUpper.rotation.set(0, 0,  1.1)  // z positif = bras droit vers le BAS
+  if (leftLower)  leftLower.rotation.set(0, 0, -0.15)
+  if (rightLower) rightLower.rotation.set(0, 0,  0.15)
   if (spine)      spine.rotation.set(0, 0, 0)
 }
 
@@ -242,10 +242,10 @@ export default function Lola3D({
         switch (state) {
           case 'idle':
             // Bras le long du corps avec légère oscillation
-            if (lArm) lArm.rotation.set(0.05, 0, 1.1 + noise3D(t*0.08, 50, 0)*0.03)
-            if (rArm) rArm.rotation.set(0.05, 0, -1.1 - noise3D(t*0.09, 60, 0)*0.03)
-            if (lLow) lLow.rotation.set(0, 0, 0.1)
-            if (rLow) rLow.rotation.set(0, 0, -0.1)
+            if (lArm) lArm.rotation.set(0.05, 0, -1.1 + noise3D(t*0.08, 50, 0)*0.03)
+            if (rArm) rArm.rotation.set(0.05, 0,  1.1 - noise3D(t*0.09, 60, 0)*0.03)
+            if (lLow) lLow.rotation.set(0, 0, -0.1)
+            if (rLow) rLow.rotation.set(0, 0,  0.1)
             lerpMorph(vrm, 'neutral', 0.6, delta * 2)
             lerpMorph(vrm, 'happy', 0, delta * 2)
             break
@@ -253,31 +253,31 @@ export default function Lola3D({
           case 'listening':
             // Légère inclinaison tête vers l'avant
             if (head) head.rotation.x = 0.08 + noise3D(t*0.2, 20, 0)*0.02
-            if (lArm) lArm.rotation.set(0, 0, 1.1)
-            if (rArm) rArm.rotation.set(0, 0, -1.1)
+            if (lArm) lArm.rotation.set(0, 0, -1.1)
+            if (rArm) rArm.rotation.set(0, 0,  1.1)
             lerpMorph(vrm, 'surprised', 0.15, delta * 3)
             break
 
           case 'thinking':
             // Bras droit légèrement levé, tête inclinée
-            if (rArm) rArm.rotation.set(-0.3, 0, -0.7)
-            if (rLow) rLow.rotation.set(-0.4, 0, -0.2)
+            if (rArm) rArm.rotation.set(-0.3, 0,  0.7)
+            if (rLow) rLow.rotation.set(-0.4, 0,  0.2)
             if (head) head.rotation.z = -0.05
-            if (lArm) lArm.rotation.set(0, 0, 1.1)
+            if (lArm) lArm.rotation.set(0, 0, -1.1)
             lerpMorph(vrm, 'neutral', 0.4, delta * 2)
             break
 
           case 'speaking':
             // Bras gauche légèrement levé — geste naturel
             const gesture = Math.sin(t * 1.8) * 0.12
-            if (lArm) lArm.rotation.set(-gesture * 0.3, 0, 0.85 + gesture)
-            if (rArm) rArm.rotation.set(0, 0, -1.1)
+            if (lArm) lArm.rotation.set(-gesture * 0.3, 0, -0.85 - gesture)
+            if (rArm) rArm.rotation.set(0, 0,  1.1)
             lerpMorph(vrm, 'happy', 0.25, delta * 4)
             break
 
           case 'happy':
-            if (lArm) lArm.rotation.set(-0.2, 0, 0.9)
-            if (rArm) rArm.rotation.set(-0.2, 0, -0.9)
+            if (lArm) lArm.rotation.set(-0.2, 0, -0.9)
+            if (rArm) rArm.rotation.set(-0.2, 0,  0.9)
             lerpMorph(vrm, 'happy', 0.9, delta * 3)
             break
         }

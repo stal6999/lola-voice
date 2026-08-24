@@ -26,9 +26,9 @@ interface LolaSceneProps {
 }
 
 const POSITIONS = {
-  center: { x: 400, y: 490 },
-  left:   { x: 240, y: 490 },
-  desk:   { x: 530, y: 490 },
+  center: { x: 310, y: 490 },  // légèrement à gauche du centre — TV à droite
+  left:   { x: 200, y: 490 },
+  desk:   { x: 350, y: 490 },
 }
 
 const STATE_POS: Record<LolaState, { pos: keyof typeof POSITIONS; sitting: boolean }> = {
@@ -195,7 +195,7 @@ export default function LolaScene({
       <rect x="0" y="0" width={VW} height="8" fill="rgba(200,185,160,0.5)"/>
       <rect x="0" y="470" width={VW} height="5" fill="rgba(180,160,130,0.4)"/>
 
-      {/* ══ GRANDE VITRE DROITE — VUE SUR FORÊT ══ */}
+      {/* ══ GRANDE VITRE DROITE — VUE SUR FORÊT (derrière la TV) ══ */}
       {/* Cadre vitré — prend toute la hauteur droite */}
       <rect x="420" y="0" width="380" height="470" fill="none" stroke="#c8b898" strokeWidth="6"/>
       {/* Montants verticaux */}
@@ -301,38 +301,40 @@ export default function LolaScene({
       {[0,1,2,3,4].map(i => <line key={i} x1="0" y1={480+i*22} x2={VW} y2={480+i*22} stroke="rgba(120,80,30,0.15)" strokeWidth="0.7"/>)}
       {[160,320,480,640].map(x => <line key={x} x1={x} y1="470" x2={x} y2="600" stroke="rgba(100,65,20,0.12)" strokeWidth="0.5"/>)}
 
-      {/* ══ ÉCRAN TV — accroché au mur DROIT, mi-hauteur (entre bibliothèque et fenêtre) ══ */}
-      <rect x="422" y="160" width="155" height="115" rx="8" fill="#111"/>
-      <rect x="427" y="165" width="145" height="105" rx="4" fill="#010a01"/>
-      <rect x="427" y="165" width="145" height="105" rx="4" fill="none" stroke="rgba(0,220,80,0.45)" strokeWidth="1.5"/>
-      {/* Support mural TV */}
-      <rect x="492" y="278" width="12" height="16" fill="#555"/>
-      <rect x="480" y="292" width="36" height="5" rx="3" fill="#444"/>
+      {/* ══ ÉCRAN TV — grand, mural, à droite de Lola, mi-hauteur, sans pied ══ */}
+      {/* Cadre TV fin et élégant */}
+      <rect x="480" y="120" width="290" height="210" rx="6" fill="#0a0a0a"/>
+      <rect x="486" y="126" width="278" height="198" rx="3" fill="#020f02"/>
+      {/* Liseré vert néon discret */}
+      <rect x="486" y="126" width="278" height="198" rx="3" fill="none" stroke="rgba(0,220,80,0.5)" strokeWidth="1.5"/>
+      {/* Fixation murale minimaliste — 2 vis seulement */}
+      <circle cx="500" cy="128" r="3" fill="#333"/>
+      <circle cx="762" cy="128" r="3" fill="#333"/>
       {/* Contenu écran TV */}
-      <foreignObject x={427} y={165} width={145} height={105}>
+      <foreignObject x={486} y={126} width={278} height={198}>
         {/* @ts-expect-error xmlns needed */}
         <div xmlns="http://www.w3.org/1999/xhtml" style={{
-          width:'100%',height:'100%',padding:'6px 8px',
-          fontFamily:'"Courier New",monospace',fontSize:'9px',
-          color:'#00e855',lineHeight:'1.6',overflowY:'auto',
-          background:'transparent',whiteSpace:'pre-wrap',wordBreak:'break-word',
-          textShadow:'0 0 6px rgba(0,240,80,0.55)',
+          width:'100%', height:'100%', padding:'10px 14px',
+          fontFamily:'"Courier New",monospace', fontSize:'11px',
+          color:'#00e855', lineHeight:'1.65', overflowY:'auto',
+          background:'transparent', whiteSpace:'pre-wrap', wordBreak:'break-word',
+          textShadow:'0 0 8px rgba(0,240,80,0.6)',
         }}>
           {screenContent ? displayedText : (
             speaking  ? '▶ LOLA EN LIGNE...' :
-            loading   ? '◆ ANALYSE...' :
+            loading   ? '◆ ANALYSE EN COURS...' :
             listening ? '⏺ ÉCOUTE...' :
-            '■ SYSTÈME ACTIF\n> Mémoire ✓\n> Connexion ✓\n> Prêt'
+            '■ SYSTÈME ACTIF\n> Mémoire Hermes ✓\n> Connexion IA ✓\n> TC Expertise ✓\n> Prêt'
           )}
         </div>
       </foreignObject>
-      {/* Waveform si parle */}
-      {speaking && Array.from({length:8},(_,i) => {
-        const bh = 5+Math.sin(i*1.0)*10
-        return <rect key={i} x={435+i*16} y={220-bh/2} width={11} height={bh} rx="3"
-          fill="rgba(0,230,80,0.55)">
-          <animate attributeName="height" values={`${bh};${3+Math.random()*16};${bh}`}
-            dur={`${0.22+i*0.05}s`} repeatCount="indefinite"/>
+      {/* Waveform animée si Lola parle */}
+      {speaking && Array.from({length:14},(_,i) => {
+        const bh = 7+Math.sin(i*1.1)*14
+        return <rect key={i} x={496+i*18} y={200-bh/2} width={13} height={bh} rx="3"
+          fill="rgba(0,230,80,0.6)">
+          <animate attributeName="height" values={`${bh};${4+Math.random()*22};${bh}`}
+            dur={`${0.2+i*0.04}s`} repeatCount="indefinite"/>
         </rect>
       })}
 
