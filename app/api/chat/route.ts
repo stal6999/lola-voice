@@ -1,8 +1,9 @@
 import { NextRequest } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import fs from 'fs'
+import { LOLA_STATIC_CONTEXT } from '@/lib/lola-context'
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
 function loadHermesMemory(): string {
   const parts: string[] = []
@@ -15,7 +16,7 @@ function loadHermesMemory(): string {
       if (fs.existsSync(path)) {
         parts.push(`<${label.toLowerCase().replace(/ /g,'_')}>\n${fs.readFileSync(path, 'utf-8').slice(0, 1800)}\n</${label.toLowerCase().replace(/ /g,'_')}>`)
       }
-    } catch { /* ignore */ }
+    } catch { /* ignore — Vercel serverless n'a pas accès au filesystem */ }
   }
   return parts.join('\n\n')
 }
@@ -58,8 +59,12 @@ Christophe pilote tout depuis iPhone, ne code pas.
 </tcee_context>`
 
 function buildDynamicContext(): string {
-  const memory = loadHermesMemory()
-  return memory ? `\n<memory_context>\n${memory}\n</memory_context>` : ''
+  // 1. Essayer la mémoire Hermes locale (serveur dédié)
+  const localMemory = loadHermesMemory()
+  if (localMemory) return `\n<memory_context>\n${localMemory}\n</memory_context>`
+  
+  // 2. Fallback : contexte statique embarqué (Vercel serverless)
+  return `\n<memory_context>\n${LOLA_STATIC_CONTEXT}\n</memory_context>`
 }
 
 export async function POST(req: NextRequest) {
