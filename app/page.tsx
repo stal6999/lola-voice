@@ -17,6 +17,18 @@ type MouthState = 'closed' | 'half' | 'open'
 type Expression = 'neutral' | 'listening' | 'thinking' | 'smiling'
 type LolaState = 'idle' | 'listening' | 'thinking' | 'speaking' | 'loading' | 'alert' | 'happy'
 
+// FIX 5: Parser les motion tags dans les réponses de Lola
+function parseLolaResponse(text: string): { clean: string; emotion: string | null; gesture: string | null } {
+  const emotionMatch = text.match(/\[emotion:(\w+)\]/)
+  const gestureMatch = text.match(/\[gesture:(\w+)\]/)
+  const clean = text.replace(/\[emotion:\w+\]/g, '').replace(/\[gesture:\w+\]/g, '').trim()
+  return {
+    clean,
+    emotion: emotionMatch?.[1] ?? null,
+    gesture: gestureMatch?.[1] ?? null,
+  }
+}
+
 export default function LolaPage() {
   // ── Core state ──
   const [messages, setMessages]   = useState<Message[]>([])
@@ -53,6 +65,7 @@ export default function LolaPage() {
   const audioRef        = useRef<HTMLAudioElement | null>(null)
   const audioUnlocked   = useRef(false)
   const messagesRef     = useRef<Message[]>([])
+  const audioCtxRef     = useRef<AudioContext | null>(null)
   const silenceTimer    = useRef<ReturnType<typeof setTimeout> | null>(null)
   const convModeRef     = useRef(false)
   const mutedRef        = useRef(false)
@@ -79,18 +92,6 @@ export default function LolaPage() {
   }, [])
   useEffect(() => { convModeRef.current = conversationMode }, [conversationMode])
   useEffect(() => { mutedRef.current = muted }, [muted])
-
-  // ── Unlock audio anticipé dès premier touch ──
-  useEffect(() => {
-    const unlock = () => unlockAudio()
-    window.addEventListener('touchstart', unlock, { once: true })
-    window.addEventListener('click', unlock, { once: true })
-    return () => {
-      window.removeEventListener('touchstart', unlock)
-      window.removeEventListener('click', unlock)
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
 
   // ── Scroll chat ──
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])

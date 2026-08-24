@@ -15,6 +15,7 @@ interface Lola3DProps {
   speaking?: boolean
   listening?: boolean
   loading?: boolean
+  analyser?: AnalyserNode | null
   onReady?: () => void
 }
 
@@ -69,6 +70,7 @@ function applyRestPose(vrm: VRM) {
 export default function Lola3D({
   width, height, lolaState = 'idle',
   speaking = false, listening = false, loading = false,
+  analyser,
   onReady,
 }: Lola3DProps) {
   const canvasRef    = useRef<HTMLCanvasElement>(null)
@@ -81,11 +83,24 @@ export default function Lola3D({
   const stateRef     = useRef(lolaState)
   const speakRef     = useRef(speaking)
   const listenRef    = useRef(listening)
+  // FIX 6: Ref pour l'analyser FFT (lip-sync réel)
+  const analyserRef  = useRef<AnalyserNode | null>(null)
+  const fftDataRef   = useRef<Uint8Array<ArrayBuffer> | null>(null)
   const [vrmLoaded, setVrmLoaded] = useState(false)
 
   useEffect(() => { stateRef.current  = lolaState }, [lolaState])
   useEffect(() => { speakRef.current  = speaking  }, [speaking])
   useEffect(() => { listenRef.current = listening }, [listening])
+
+  // FIX 6: Mettre à jour l'analyser quand il change depuis page.tsx
+  useEffect(() => {
+    analyserRef.current = analyser ?? null
+    if (analyser) {
+      fftDataRef.current = new Uint8Array(analyser.frequencyBinCount) as Uint8Array<ArrayBuffer>
+    } else {
+      fftDataRef.current = null
+    }
+  }, [analyser])
 
   const lerpMorph = useCallback((vrm: VRM, name: string, target: number, speed: number) => {
     try {
@@ -105,6 +120,17 @@ export default function Lola3D({
     node.rotation.x = THREE.MathUtils.lerp(node.rotation.x, tx, speed)
     node.rotation.y = THREE.MathUtils.lerp(node.rotation.y, ty, speed)
     node.rotation.z = THREE.MathUtils.lerp(node.rotation.z, tz, speed)
+  }, [])
+
+  // FIX 6: Calculer l'amplitude vocale depuis FFT
+  const getVocalAmplitude = useCallback((): number => {
+    const analyserNode = analyserRef.current
+    const data = fftDataRef.current
+    if (!analyserNode || !data) return -1 // -1 = pas d'analyser dispo
+    analyserNode.getByteFrequencyData(data)
+    // Bandes de fréquence vocales (80Hz–1kHz sur fftSize=256, sr=44100)
+    const vocal = Array.from(data.slice(2, 12)).reduce((a, b) => a + b, 0) / 10
+    return vocal
   }, [])
 
   useEffect(() => {
@@ -146,6 +172,11 @@ export default function Lola3D({
     scene.environment = envTex
     pmrem.dispose()
 
+    // FIX 2: Cible pour smooth eye tracking — orbite lentement autour du visage
+    const eyeTarget = new THREE.Object3D()
+    eyeTarget.position.set(0, 1.5, 2.0) // Devant la camera, au niveau du visage
+    scene.add(eyeTarget)
+
     // ── Charger VRM ──
     const loader = new GLTFLoader()
     loader.register(p => new VRMLoaderPlugin(p))
@@ -179,6 +210,16 @@ export default function Lola3D({
       })
 
       scene.add(vrm.scene)
+
+      // FIX 1: frustumCulled = false — évite la disparition partielle de l'avatar
+      vrm.scene.traverse((obj) => { obj.frustumCulled = false })
+
+      // FIX 2: Activer smooth look-at tracking avec la cible orbitale
+      if (vrm.lookAt) {
+        vrm.lookAt.target = eyeTarget
+        vrm.lookAt.autoUpdate = true
+      }
+
       vrmRef.current = vrm
       applyRestPose(vrm)
       vrm.update(0)
@@ -208,6 +249,16 @@ export default function Lola3D({
       const state = stateRef.current
       const isSpeaking  = speakRef.current
       const isListening = listenRef.current
+
+      // FIX 2: Mise à jour smooth de la cible oculaire — orbite naturelle
+      // La cible bouge lentement autour d'un point devant la caméra
+      const eyeX = Math.sin(t * 0.11) * 0.25 + Math.sin(t * 0.07) * 0.08
+      const eyeY = 1.6 + Math.sin(t * 0.09) * 0.08 + Math.cos(t * 0.13) * 0.04
+      const eyeZ = 2.0
+      // Lerp très doux pour l'inertie (simule VRMLookAtSmootherLoaderPlugin)
+      eyeTarget.position.x = THREE.MathUtils.lerp(eyeTarget.position.x, eyeX, 0.035)
+      eyeTarget.position.y = THREE.MathUtils.lerp(eyeTarget.position.y, eyeY, 0.035)
+      eyeTarget.position.z = eyeZ
 
       if (!vrmRef.current) { renderer.render(scene, camera); return }
       const vrm = vrmRef.current
@@ -350,14 +401,25 @@ export default function Lola3D({
         }
       }
 
-      // ── LIP-SYNC réaliste ──
+      // ── LIP-SYNC — FIX 6: FFT réel si analyser dispo, sinon Math.sin fallback ──
       if (isSpeaking) {
-        const mA  = Math.max(0, Math.sin(t * 8.5)  * 0.5  + 0.15)
-        const mO  = Math.max(0, Math.sin(t * 6.0)  * 0.25 + 0.05)
-        const mI  = Math.max(0, Math.sin(t * 10.0) * 0.2)
-        lerpMorph(vrm, 'aa', mA,  0.4)
-        lerpMorph(vrm, 'ou', mO,  0.3)
-        lerpMorph(vrm, 'ih', mI,  0.25)
+        const vocal = getVocalAmplitude()
+        if (vocal >= 0) {
+          // FIX 6: Amplitude audio réelle depuis FFT
+          const mouthOpen = Math.min(1, vocal / 90)
+          lerpMorph(vrm, 'aa', mouthOpen, 0.4)
+          // Variantes vocaliques dérivées de l'amplitude
+          lerpMorph(vrm, 'ou', mouthOpen * 0.4, 0.3)
+          lerpMorph(vrm, 'ih', mouthOpen * 0.25, 0.25)
+        } else {
+          // Fallback Math.sin si pas d'analyser
+          const mA  = Math.max(0, Math.sin(t * 8.5)  * 0.5  + 0.15)
+          const mO  = Math.max(0, Math.sin(t * 6.0)  * 0.25 + 0.05)
+          const mI  = Math.max(0, Math.sin(t * 10.0) * 0.2)
+          lerpMorph(vrm, 'aa', mA,  0.4)
+          lerpMorph(vrm, 'ou', mO,  0.3)
+          lerpMorph(vrm, 'ih', mI,  0.25)
+        }
       } else {
         lerpMorph(vrm, 'aa', 0, 0.25)
         lerpMorph(vrm, 'ou', 0, 0.25)

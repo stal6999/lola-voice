@@ -1,25 +1,12 @@
 import { NextRequest } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
-import fs from 'fs'
 import { LOLA_STATIC_CONTEXT } from '@/lib/lola-context'
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
+// FIX 3: Edge Runtime — évite le timeout Vercel 10s sur les fonctions serverless
+// Note: filesystem non disponible en Edge Runtime → fallback statique uniquement
+export const runtime = 'edge'
 
-function loadHermesMemory(): string {
-  const parts: string[] = []
-  const files = [
-    { path: '/data/memories/MEMORY.md', label: 'MÉMOIRE HERMES' },
-    { path: '/data/memories/USER.md', label: 'PROFIL CHRISTOPHE' },
-  ]
-  for (const { path, label } of files) {
-    try {
-      if (fs.existsSync(path)) {
-        parts.push(`<${label.toLowerCase().replace(/ /g,'_')}>\n${fs.readFileSync(path, 'utf-8').slice(0, 1800)}\n</${label.toLowerCase().replace(/ /g,'_')}>`)
-      }
-    } catch { /* ignore — Vercel serverless n'a pas accès au filesystem */ }
-  }
-  return parts.join('\n\n')
-}
+const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
 // System prompt fixe (long — activera le prompt caching Anthropic automatiquement)
 const FIXED_SYSTEM = `<persona>
@@ -39,6 +26,12 @@ RÈGLES ABSOLUES — ne jamais enfreindre :
 6. Tu commences toujours par la réponse — jamais par une formule d'introduction creuse
 7. Tu as : vision (images), lecture de fichiers, accès à la mémoire complète de Christophe
 8. Économies/chiffres = toujours indicatifs/hypothétiques
+
+FIX 5 — MOTION TAGS : Quand tu veux exprimer une émotion ou un geste, ajoute des tags dans ta réponse :
+[emotion:happy] [emotion:sad] [emotion:surprised] [emotion:neutral]
+[gesture:wave] [gesture:nod] [gesture:think] [gesture:bow] [gesture:clap]
+Mets-les AVANT la phrase concernée. Ex: "[emotion:happy] Je suis ravie de vous voir !"
+Max 1 tag par réponse sauf si vraiment nécessaire.
 </constraints>
 
 <capabilities>
@@ -59,11 +52,7 @@ Christophe pilote tout depuis iPhone, ne code pas.
 </tcee_context>`
 
 function buildDynamicContext(): string {
-  // 1. Essayer la mémoire Hermes locale (serveur dédié)
-  const localMemory = loadHermesMemory()
-  if (localMemory) return `\n<memory_context>\n${localMemory}\n</memory_context>`
-  
-  // 2. Fallback : contexte statique embarqué (Vercel serverless)
+  // Edge Runtime : uniquement le contexte statique embarqué (pas de filesystem)
   return `\n<memory_context>\n${LOLA_STATIC_CONTEXT}\n</memory_context>`
 }
 
