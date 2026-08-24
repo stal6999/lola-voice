@@ -301,19 +301,19 @@ export default function LolaScene({
       {[0,1,2,3,4].map(i => <line key={i} x1="0" y1={480+i*22} x2={VW} y2={480+i*22} stroke="rgba(120,80,30,0.15)" strokeWidth="0.7"/>)}
       {[160,320,480,640].map(x => <line key={x} x1={x} y1="470" x2={x} y2="600" stroke="rgba(100,65,20,0.12)" strokeWidth="0.5"/>)}
 
-      {/* ══ ÉCRAN TV — accroché au mur gauche ══ */}
-      <rect x="205" y="65" width="210" height="155" rx="8" fill="#111"/>
-      <rect x="210" y="70" width="200" height="145" rx="4" fill="#010a01"/>
-      <rect x="210" y="70" width="200" height="145" rx="4" fill="none" stroke="rgba(0,220,80,0.45)" strokeWidth="1.5"/>
-      {/* Support mural */}
-      <rect x="298" y="220" width="16" height="20" fill="#555"/>
-      <rect x="282" y="238" width="48" height="6" rx="3" fill="#444"/>
-      {/* Contenu écran */}
-      <foreignObject x={210} y={70} width={200} height={145}>
+      {/* ══ ÉCRAN TV — accroché au mur DROIT, mi-hauteur (entre bibliothèque et fenêtre) ══ */}
+      <rect x="422" y="160" width="155" height="115" rx="8" fill="#111"/>
+      <rect x="427" y="165" width="145" height="105" rx="4" fill="#010a01"/>
+      <rect x="427" y="165" width="145" height="105" rx="4" fill="none" stroke="rgba(0,220,80,0.45)" strokeWidth="1.5"/>
+      {/* Support mural TV */}
+      <rect x="492" y="278" width="12" height="16" fill="#555"/>
+      <rect x="480" y="292" width="36" height="5" rx="3" fill="#444"/>
+      {/* Contenu écran TV */}
+      <foreignObject x={427} y={165} width={145} height={105}>
         {/* @ts-expect-error xmlns needed */}
         <div xmlns="http://www.w3.org/1999/xhtml" style={{
-          width:'100%',height:'100%',padding:'8px 10px',
-          fontFamily:'"Courier New",monospace',fontSize:'10px',
+          width:'100%',height:'100%',padding:'6px 8px',
+          fontFamily:'"Courier New",monospace',fontSize:'9px',
           color:'#00e855',lineHeight:'1.6',overflowY:'auto',
           background:'transparent',whiteSpace:'pre-wrap',wordBreak:'break-word',
           textShadow:'0 0 6px rgba(0,240,80,0.55)',
@@ -327,11 +327,11 @@ export default function LolaScene({
         </div>
       </foreignObject>
       {/* Waveform si parle */}
-      {speaking && Array.from({length:10},(_,i) => {
-        const bh = 6+Math.sin(i*1.0)*12
-        return <rect key={i} x={220+i*18} y={134-bh/2} width={13} height={bh} rx="3"
+      {speaking && Array.from({length:8},(_,i) => {
+        const bh = 5+Math.sin(i*1.0)*10
+        return <rect key={i} x={435+i*16} y={220-bh/2} width={11} height={bh} rx="3"
           fill="rgba(0,230,80,0.55)">
-          <animate attributeName="height" values={`${bh};${4+Math.random()*20};${bh}`}
+          <animate attributeName="height" values={`${bh};${3+Math.random()*16};${bh}`}
             dur={`${0.22+i*0.05}s`} repeatCount="indefinite"/>
         </rect>
       })}

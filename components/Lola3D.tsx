@@ -20,7 +20,7 @@ interface Lola3DProps {
 
 function createPearlSkinMaterial(envMap: THREE.Texture | null): THREE.MeshPhysicalMaterial {
   const m = new THREE.MeshPhysicalMaterial({
-    color: new THREE.Color(0xc8dff0),
+    color: new THREE.Color(0xd8e8f2), // Peau nacrée bleutée exacte #D8E8F2
     iridescence: 0.9,
     iridescenceIOR: 1.4,
     iridescenceThicknessRange: [80, 350],
@@ -36,6 +36,18 @@ function createPearlSkinMaterial(envMap: THREE.Texture | null): THREE.MeshPhysic
   })
   if (envMap) m.envMap = envMap
   return m
+}
+
+// Les noms à exclure du shader nacré (cheveux, yeux, vêtements, ongles...)
+function isNonSkinMaterial(name: string): boolean {
+  const n = name.toLowerCase()
+  return n.includes('hair') || n.includes('eye') || n.includes('lash') ||
+         n.includes('brow') || n.includes('cloth') || n.includes('outfit') ||
+         n.includes('dress') || n.includes('skirt') || n.includes('shirt') ||
+         n.includes('sleeve') || n.includes('nail') || n.includes('shoe') ||
+         n.includes('sock') || n.includes('glove') || n.includes('accessory') ||
+         n.includes('ribbon') || n.includes('bow') || n.includes('belt') ||
+         n.includes('lip') || n.includes('tooth') || n.includes('tongue')
 }
 
 // Pose bras le long du corps
@@ -146,21 +158,19 @@ export default function Lola3D({
         // PAS de rotation.y = Math.PI ici (bug précédent)
         vrm.scene.position.set(0, 0, 0)
 
-        // Appliquer shader nacré sur la peau
+        // Appliquer shader nacré sur la peau — tous SkinnedMesh sauf cheveux/yeux/vêtements
         const pearlMat = createPearlSkinMaterial(envTex)
         vrm.scene.traverse(obj => {
           if (!(obj instanceof THREE.SkinnedMesh)) return
           const mats = Array.isArray(obj.material) ? obj.material : [obj.material]
           const newMats = mats.map((m: THREE.Material) => {
-            const name = m.name?.toLowerCase() ?? ''
-            if (name.includes('skin') || name.includes('face') ||
-                name.includes('body') || name.includes('head')) {
-              const p = pearlMat.clone()
-              ;(p as any).morphTargets = true
-              ;(p as any).morphNormals = true
-              return p
-            }
-            return m
+            // Si c'est clairement pas de la peau → garder original
+            if (isNonSkinMaterial(m.name ?? '')) return m
+            // Sinon → shader nacré (skin, face, body, head, mais aussi noms VRoid génériques)
+            const p = pearlMat.clone()
+            ;(p as any).morphTargets = true
+            ;(p as any).morphNormals = true
+            return p
           })
           obj.material = Array.isArray(obj.material) ? newMats : newMats[0]
           obj.castShadow = true

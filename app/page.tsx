@@ -557,7 +557,8 @@ function MobileLayout({ winW, winH, screenContent, speaking, listening, loading,
       </div>
 
       {/* LOLA + DÉCOR CENTRE */}
-      <div style={{ height: lolaH, position: 'relative', overflow: 'hidden' }}>
+      <div style={{ height: lolaH, position: 'relative', overflow: 'hidden', background: '#0e0c06' }}>
+        {/* Décor SVG derrière */}
         <LolaScene
           width={winW} height={lolaH}
           screenContent={null} mobileMode
@@ -569,6 +570,25 @@ function MobileLayout({ winW, winH, screenContent, speaking, listening, loading,
           microExpression={microExpression}
         />
 
+        {/* Lola 3D VRM — centrée, corps entier, en overlay sur le décor */}
+        <div style={{
+          position: 'absolute',
+          left: '50%', bottom: 0,
+          transform: 'translateX(-50%)',
+          width: Math.round(lolaH * 0.6),
+          height: lolaH,
+          pointerEvents: 'none',
+        }}>
+          <Lola3D
+            width={Math.round(lolaH * 0.6)}
+            height={lolaH}
+            lolaState={lolaState}
+            speaking={speaking}
+            listening={listening}
+            loading={loading}
+          />
+        </div>
+
         {/* Icônes milieu */}
         <div style={{ position: 'absolute', bottom: 10, left: '50%', transform: 'translateX(-50%)', display: 'flex', gap: 16, zIndex: 10 }}>
           <MobileIconBtn icon="📁" active={fileReady} onClick={onFileClick} badge={fileReady} />
@@ -577,7 +597,7 @@ function MobileLayout({ winW, winH, screenContent, speaking, listening, loading,
 
         {/* Transcript */}
         {liveTranscript && (
-          <div style={{ position: 'absolute', top: 8, left: 12, right: 12, background: 'rgba(0,0,0,0.75)', borderRadius: 10, padding: '5px 10px' }}>
+          <div style={{ position: 'absolute', top: 8, left: 12, right: 12, background: 'rgba(0,0,0,0.75)', borderRadius: 10, padding: '5px 10px', zIndex: 11 }}>
             <span style={{ fontSize: 11, color: '#a8d8ff', fontStyle: 'italic' }}>"{liveTranscript}…"</span>
           </div>
         )}
