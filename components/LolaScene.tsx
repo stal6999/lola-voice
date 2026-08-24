@@ -50,6 +50,14 @@ export default function LolaScene({
   microExpression = 'none', mobileMode = false,
 }: LolaSceneProps) {
 
+  const [tvPhotoIdx, setTvPhotoIdx] = useState(0)
+  const TV_PHOTOS = ['/lola-fullbody.jpg', '/lola-portrait.jpg', '/lola-smile.jpg', '/lola-thinking.jpg', '/lola-listen.jpg']
+
+  useEffect(() => {
+    const id = setInterval(() => setTvPhotoIdx(i => (i + 1) % TV_PHOTOS.length), 5000)
+    return () => clearInterval(id)
+  }, [])
+
   const [displayedText, setDisplayedText] = useState('')
   const [lolaPos, setLolaPos] = useState(POSITIONS.center)
   const [isSitting, setIsSitting] = useState(false)
@@ -302,33 +310,40 @@ export default function LolaScene({
       {[160,320,480,640].map(x => <line key={x} x1={x} y1="470" x2={x} y2="600" stroke="rgba(100,65,20,0.12)" strokeWidth="0.5"/>)}
 
       {/* ══ ÉCRAN TV — grand, mural, à droite de Lola, mi-hauteur, sans pied ══ */}
-      {/* Cadre TV fin et élégant */}
       <rect x="480" y="120" width="290" height="210" rx="6" fill="#0a0a0a"/>
       <rect x="486" y="126" width="278" height="198" rx="3" fill="#020f02"/>
-      {/* Liseré vert néon discret */}
       <rect x="486" y="126" width="278" height="198" rx="3" fill="none" stroke="rgba(0,220,80,0.5)" strokeWidth="1.5"/>
-      {/* Fixation murale minimaliste — 2 vis seulement */}
+      {/* Fixation murale — 2 vis */}
       <circle cx="500" cy="128" r="3" fill="#333"/>
       <circle cx="762" cy="128" r="3" fill="#333"/>
-      {/* Contenu écran TV */}
-      <foreignObject x={486} y={126} width={278} height={198}>
-        {/* @ts-expect-error xmlns needed */}
-        <div xmlns="http://www.w3.org/1999/xhtml" style={{
-          width:'100%', height:'100%', padding:'10px 14px',
-          fontFamily:'"Courier New",monospace', fontSize:'11px',
-          color:'#00e855', lineHeight:'1.65', overflowY:'auto',
-          background:'transparent', whiteSpace:'pre-wrap', wordBreak:'break-word',
-          textShadow:'0 0 8px rgba(0,240,80,0.6)',
-        }}>
-          {screenContent ? displayedText : (
-            speaking  ? '▶ LOLA EN LIGNE...' :
-            loading   ? '◆ ANALYSE EN COURS...' :
-            listening ? '⏺ ÉCOUTE...' :
-            '■ SYSTÈME ACTIF\n> Mémoire Hermes ✓\n> Connexion IA ✓\n> TC Expertise ✓\n> Prêt'
-          )}
-        </div>
-      </foreignObject>
-      {/* Waveform animée si Lola parle */}
+      {/* Contenu TV : photos si idle/listening, texte si speaking/loading */}
+      {(speaking || loading) ? (
+        <foreignObject x={486} y={126} width={278} height={198}>
+          {/* @ts-expect-error xmlns needed */}
+          <div xmlns="http://www.w3.org/1999/xhtml" style={{
+            width:'100%', height:'100%', padding:'10px 14px',
+            fontFamily:'"Courier New",monospace', fontSize:'11px',
+            color:'#00e855', lineHeight:'1.65', overflowY:'auto',
+            background:'transparent', whiteSpace:'pre-wrap', wordBreak:'break-word',
+            textShadow:'0 0 8px rgba(0,240,80,0.6)',
+          }}>
+            {screenContent ? displayedText : (loading ? '◆ ANALYSE EN COURS...' : '▶ LOLA EN LIGNE...')}
+          </div>
+        </foreignObject>
+      ) : (
+        /* Photo slideshow toutes les 5s */
+        <image
+          href={TV_PHOTOS[tvPhotoIdx]}
+          x={486} y={126} width={278} height={198}
+          preserveAspectRatio="xMidYMid slice"
+          style={{ borderRadius: 3 }}
+        />
+      )}
+      {/* Overlay vert subtil sur les photos */}
+      {(!speaking && !loading) && (
+        <rect x="486" y="126" width="278" height="198" rx="3" fill="rgba(0,20,0,0.15)"/>
+      )}
+      {/* Waveform si parle */}
       {speaking && Array.from({length:14},(_,i) => {
         const bh = 7+Math.sin(i*1.1)*14
         return <rect key={i} x={496+i*18} y={200-bh/2} width={13} height={bh} rx="3"

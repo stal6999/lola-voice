@@ -532,36 +532,20 @@ function MobileLayout({ winW, winH, screenContent, speaking, listening, loading,
   onToggleMute, muted, onFileClick, onCameraClick, fileReady,
   statusColor, statusLabel, chatEndRef }: any) {
 
-  const screenH = Math.round(winH * 0.22)
-  const chatH   = Math.round(winH * 0.30)
+  // Layout sans bandes noires : scène + chat + boutons = 100% hauteur
   const btnBarH = 56
-  const lolaH   = winH - screenH - chatH - btnBarH
+  const chatH   = Math.round(winH * 0.33)
+  const lolaH   = winH - chatH - btnBarH  // remplit tout le reste
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', width: winW, height: winH }}>
+    <div style={{ display: 'flex', flexDirection: 'column', width: winW, height: winH, overflow: 'hidden' }}>
 
-      {/* ÉCRAN HAUT */}
-      <div style={{ height: screenH, background: '#020802', borderBottom: '2px solid rgba(0,200,80,0.2)', position: 'relative', overflow: 'hidden', borderRadius: '0 0 16px 16px' }}>
-        {/* Contenu écran */}
-        <div style={{ position: 'absolute', inset: 0, padding: 12, fontFamily: 'monospace', fontSize: 12, color: '#00e050', overflowY: 'auto', lineHeight: 1.6 }}>
-          {screenContent || (speaking ? '▶ Lola parle…' : loading ? '◆ Lola réfléchit…' : listening ? '⏺ Écoute…' : '■ Système actif')}
-        </div>
-        {/* Coins déco */}
-        <div style={{ position: 'absolute', top: 6, left: 6, width: 12, height: 12, borderTop: '1.5px solid rgba(0,200,80,0.4)', borderLeft: '1.5px solid rgba(0,200,80,0.4)' }} />
-        <div style={{ position: 'absolute', top: 6, right: 6, width: 12, height: 12, borderTop: '1.5px solid rgba(0,200,80,0.4)', borderRight: '1.5px solid rgba(0,200,80,0.4)' }} />
-        {/* Status */}
-        <div style={{ position: 'absolute', top: 6, left: '50%', transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: 5 }}>
-          <div style={{ width: 5, height: 5, borderRadius: '50%', background: statusColor, animation: (listening||speaking) ? 'pulse 1s infinite' : 'none' }} />
-          <span style={{ fontSize: 8, color: 'rgba(0,200,80,0.5)', fontFamily: 'monospace', letterSpacing: 2 }}>{statusLabel}</span>
-        </div>
-      </div>
-
-      {/* LOLA + DÉCOR CENTRE */}
-      <div style={{ height: lolaH, position: 'relative', overflow: 'hidden', background: '#0e0c06' }}>
-        {/* Décor SVG derrière */}
+      {/* LOLA + DÉCOR — prend tout l'espace du haut */}
+      <div style={{ height: lolaH, position: 'relative', overflow: 'hidden', flexShrink: 0 }}>
+        {/* Décor SVG */}
         <LolaScene
           width={winW} height={lolaH}
-          screenContent={null} mobileMode
+          screenContent={screenContent} mobileMode
           speaking={speaking} listening={listening} loading={loading}
           lolaState={lolaState}
           mouthState={mouthState} blinking={blinking} expression={expression}
@@ -570,17 +554,16 @@ function MobileLayout({ winW, winH, screenContent, speaking, listening, loading,
           microExpression={microExpression}
         />
 
-        {/* Lola 3D VRM — centrée, corps entier, en overlay sur le décor */}
+        {/* Lola 3D VRM — centrée, corps entier */}
         <div style={{
-          position: 'absolute',
-          left: '50%', bottom: 0,
+          position: 'absolute', left: '50%', bottom: 0,
           transform: 'translateX(-50%)',
-          width: Math.round(lolaH * 0.6),
+          width: Math.round(lolaH * 0.55),
           height: lolaH,
           pointerEvents: 'none',
         }}>
           <Lola3D
-            width={Math.round(lolaH * 0.6)}
+            width={Math.round(lolaH * 0.55)}
             height={lolaH}
             lolaState={lolaState}
             speaking={speaking}
@@ -589,42 +572,47 @@ function MobileLayout({ winW, winH, screenContent, speaking, listening, loading,
           />
         </div>
 
-        {/* Icônes milieu */}
+        {/* Status dot + label — coin haut gauche */}
+        <div style={{ position: 'absolute', top: 8, left: 10, display: 'flex', alignItems: 'center', gap: 5, zIndex: 10 }}>
+          <div style={{ width: 6, height: 6, borderRadius: '50%', background: statusColor, animation: (listening||speaking) ? 'pulse 1s infinite' : 'none' }} />
+          <span style={{ fontSize: 8, color: 'rgba(200,220,240,0.5)', fontFamily: 'monospace', letterSpacing: 2 }}>{statusLabel}</span>
+        </div>
+
+        {/* Boutons fichier + caméra */}
         <div style={{ position: 'absolute', bottom: 10, left: '50%', transform: 'translateX(-50%)', display: 'flex', gap: 16, zIndex: 10 }}>
           <MobileIconBtn icon="📁" active={fileReady} onClick={onFileClick} badge={fileReady} />
           <MobileIconBtn icon="📷" active={false} onClick={onCameraClick} />
         </div>
-
-        {/* Transcript */}
-        {liveTranscript && (
-          <div style={{ position: 'absolute', top: 8, left: 12, right: 12, background: 'rgba(0,0,0,0.75)', borderRadius: 10, padding: '5px 10px', zIndex: 11 }}>
-            <span style={{ fontSize: 11, color: '#a8d8ff', fontStyle: 'italic' }}>"{liveTranscript}…"</span>
-          </div>
-        )}
       </div>
 
       {/* ZONE CONVERSATION */}
-      <div style={{ height: chatH, background: 'rgba(4,3,1,0.98)', borderTop: '1px solid rgba(255,255,255,0.05)', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ height: chatH, background: 'rgba(4,3,1,0.99)', borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
         <div style={{ flex: 1, overflowY: 'auto', padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: 5 }}>
-          {messages.length === 0 && <div style={{ color: 'rgba(140,180,220,0.25)', fontSize: 11, textAlign: 'center', marginTop: 16 }}>Parle à Lola…</div>}
+          {messages.length === 0 && !liveTranscript && (
+            <div style={{ color: 'rgba(140,180,220,0.25)', fontSize: 11, textAlign: 'center', marginTop: 16 }}>Parle à Lola…</div>
+          )}
           {messages.slice(-4).map((m: Message, i: number) => (
-            <div key={i} style={{ alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start', maxWidth: '80%', padding: '6px 10px', borderRadius: m.role === 'user' ? '12px 12px 3px 12px' : '3px 12px 12px 12px', background: m.role === 'user' ? 'rgba(168,216,255,0.1)' : 'rgba(255,255,255,0.04)', color: m.role === 'user' ? '#a8d8ff' : '#ddeeff', fontSize: 12, lineHeight: 1.45, wordBreak: 'break-word' }}>{m.content}</div>
+            <div key={i} style={{ alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start', maxWidth: '82%', padding: '6px 11px', borderRadius: m.role === 'user' ? '12px 12px 3px 12px' : '3px 12px 12px 12px', background: m.role === 'user' ? 'rgba(168,216,255,0.12)' : 'rgba(255,255,255,0.05)', color: m.role === 'user' ? '#a8d8ff' : '#ddeeff', fontSize: 12, lineHeight: 1.45, wordBreak: 'break-word' }}>{m.content}</div>
           ))}
-          {loading && <div style={{ alignSelf: 'flex-start', color: 'rgba(140,180,220,0.4)', fontSize: 11, fontStyle: 'italic' }}>…</div>}
+          {/* Transcript live UNIQUEMENT ici — pas dupliqué dans la scène */}
+          {liveTranscript && (
+            <div style={{ alignSelf: 'flex-end', maxWidth: '82%', padding: '6px 11px', borderRadius: '12px 12px 3px 12px', background: 'rgba(168,216,255,0.07)', border: '1px dashed rgba(140,210,255,0.2)', color: 'rgba(168,216,255,0.6)', fontSize: 11, fontStyle: 'italic' }}>"{liveTranscript}…"</div>
+          )}
+          {loading && <div style={{ alignSelf: 'flex-start', color: 'rgba(140,180,220,0.4)', fontSize: 11, fontStyle: 'italic' }}>Lola réfléchit…</div>}
           <div ref={chatEndRef} />
         </div>
-        <div style={{ padding: '6px 10px', borderTop: '1px solid rgba(255,255,255,0.04)', display: 'flex', gap: 6 }}>
+        <div style={{ padding: '6px 10px', borderTop: '1px solid rgba(255,255,255,0.04)', display: 'flex', gap: 6, alignItems: 'center' }}>
           <input value={input} onChange={e => setInput(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); onSend() } }}
             placeholder="Écris à Lola…"
-            style={{ flex: 1, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 18, padding: '8px 14px', color: '#ddeeff', fontSize: 13, outline: 'none' }} />
+            style={{ flex: 1, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 18, padding: '8px 14px', color: '#ddeeff', fontSize: 13, outline: 'none' }} />
           <button onClick={onSend} disabled={!input.trim() || loading}
-            style={{ width: 34, height: 34, borderRadius: '50%', border: 'none', cursor: 'pointer', background: 'rgba(140,210,255,0.12)', color: '#a8d8ff', fontSize: 14 }}>➤</button>
+            style={{ width: 34, height: 34, borderRadius: '50%', border: 'none', cursor: 'pointer', background: 'rgba(140,210,255,0.12)', color: '#a8d8ff', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>➤</button>
         </div>
       </div>
 
       {/* BOUTONS BAS */}
-      <div style={{ height: btnBarH, background: 'rgba(3,2,1,0.98)', borderTop: '1px solid rgba(255,255,255,0.04)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 20, paddingBottom: 'env(safe-area-inset-bottom)' }}>
+      <div style={{ height: btnBarH, background: 'rgba(3,2,1,0.99)', borderTop: '1px solid rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 20, paddingBottom: 'env(safe-area-inset-bottom)', flexShrink: 0 }}>
         <MobilePrimaryBtn
           icon={conversationMode ? (muted ? '🔇' : listening ? '⏺' : '⏹') : '🎙'}
           label={conversationMode ? (muted ? 'Mute' : 'Actif') : 'Démarrer'}
