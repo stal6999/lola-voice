@@ -2,10 +2,6 @@ import { NextRequest } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { LOLA_STATIC_CONTEXT } from '@/lib/lola-context'
 
-// FIX 3: Edge Runtime — évite le timeout Vercel 10s sur les fonctions serverless
-// Note: filesystem non disponible en Edge Runtime → fallback statique uniquement
-export const runtime = 'edge'
-
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
 // System prompt fixe (long — activera le prompt caching Anthropic automatiquement)
