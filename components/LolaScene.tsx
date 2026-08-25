@@ -14,9 +14,8 @@ interface LolaSceneProps {
 }
 
 /**
- * Fond d'ambiance derrière Lola — dégradé bleu luminescent sobre.
- * Purement décoratif : léger, sans texte, sans TV dessinée dedans.
- * L'affichage riche (photos, comparatifs, citations) vit dans LolaDisplayScreen.
+ * Fond d'ambiance derrière Lola — clair, lumineux, chaleureux.
+ * Plus d'écran/TV : Lola est seule, centrale, sans décor qui distrait.
  */
 export default function LolaScene({ width, height }: LolaSceneProps) {
   const VW = 800, VH = 600
@@ -29,14 +28,15 @@ export default function LolaScene({ width, height }: LolaSceneProps) {
       preserveAspectRatio="xMidYMid slice"
     >
       <defs>
-        <radialGradient id="s-bg" cx="50%" cy="30%" r="85%">
-          <stop offset="0%" stopColor="#1c3d70"/>
-          <stop offset="45%" stopColor="#0f2547"/>
-          <stop offset="100%" stopColor="#060f24"/>
+        <radialGradient id="s-bg" cx="50%" cy="28%" r="90%">
+          <stop offset="0%" stopColor="#fdf6e8"/>
+          <stop offset="35%" stopColor="#fbeecd"/>
+          <stop offset="70%" stopColor="#f3ddac"/>
+          <stop offset="100%" stopColor="#e8c988"/>
         </radialGradient>
       </defs>
       <rect width={VW} height={VH} fill="url(#s-bg)"/>
-      <ellipse cx={VW/2} cy={VH*0.5} rx="360" ry="280" fill="rgba(90,140,220,0.10)"/>
+      <ellipse cx={VW/2} cy={VH*0.42} rx="380" ry="300" fill="rgba(255,255,255,0.35)"/>
     </svg>
   )
 }
