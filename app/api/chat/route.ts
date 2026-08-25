@@ -53,61 +53,82 @@ function buildDynamicContext(): string {
 }
 
 export async function POST(req: NextRequest) {
-  const { messages, image } = await req.json()
+  try {
+    const { messages, image } = await req.json()
 
-  // Détecter si réponse vocale (plus courte) ou texte (plus longue)
-  const lastMsg = messages[messages.length - 1]?.content || ''
-  const isVoiceMode = lastMsg.length < 200 && !image
-  const maxTokens = isVoiceMode ? 280 : 600
+    if (!Array.isArray(messages) || messages.length === 0) {
+      return new Response(
+        `data: ${JSON.stringify({ error: 'messages manquants' })}\n\n`,
+        { status: 400, headers: { 'Content-Type': 'text/event-stream' } }
+      )
+    }
 
-  // System prompt = partie fixe (cachée) + contexte dynamique
-  const systemContent = FIXED_SYSTEM + buildDynamicContext()
+    // Détecter si réponse vocale (plus courte) ou texte (plus longue)
+    const lastMsg = messages[messages.length - 1]?.content || ''
+    const isVoiceMode = lastMsg.length < 200 && !image
+    const maxTokens = isVoiceMode ? 280 : 600
 
-  // Construire les messages Claude
-  let claudeMessages = messages
-  if (image?.data && image?.mediaType) {
-    claudeMessages = [
-      ...messages.slice(0, -1),
-      {
-        role: 'user',
-        content: [
-          { type: 'image', source: { type: 'base64', media_type: image.mediaType, data: image.data } },
-          { type: 'text', text: lastMsg },
-        ],
-      },
-    ]
-  }
+    // System prompt = partie fixe (cachée) + contexte dynamique
+    const systemContent = FIXED_SYSTEM + buildDynamicContext()
 
-  // STREAMING avec prompt caching activé
-  const stream = await client.messages.stream({
-    model: 'claude-sonnet-4-6',
-    max_tokens: maxTokens,
-    temperature: isVoiceMode ? 0.7 : 0.6,
-    system: systemContent,
-    messages: claudeMessages,
-  })
+    // Construire les messages Claude
+    let claudeMessages = messages
+    if (image?.data && image?.mediaType) {
+      claudeMessages = [
+        ...messages.slice(0, -1),
+        {
+          role: 'user',
+          content: [
+            { type: 'image', source: { type: 'base64', media_type: image.mediaType, data: image.data } },
+            { type: 'text', text: lastMsg },
+          ],
+        },
+      ]
+    }
 
-  const encoder = new TextEncoder()
-  const readable = new ReadableStream({
-    async start(controller) {
-      let fullText = ''
-      for await (const chunk of stream) {
-        if (chunk.type === 'content_block_delta' && chunk.delta.type === 'text_delta') {
-          const text = chunk.delta.text
-          fullText += text
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text, done: false })}\n\n`))
+    const encoder = new TextEncoder()
+    const readable = new ReadableStream({
+      async start(controller) {
+        try {
+          // STREAMING avec prompt caching activé
+          const stream = await client.messages.stream({
+            model: 'claude-sonnet-4-6',
+            max_tokens: maxTokens,
+            temperature: isVoiceMode ? 0.7 : 0.6,
+            system: systemContent,
+            messages: claudeMessages,
+          })
+
+          let fullText = ''
+          for await (const chunk of stream) {
+            if (chunk.type === 'content_block_delta' && chunk.delta.type === 'text_delta') {
+              const text = chunk.delta.text
+              fullText += text
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text, done: false })}\n\n`))
+            }
+          }
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: fullText, done: true })}\n\n`))
+        } catch (err) {
+          console.error('Claude stream error', err)
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: 'Lola a rencontré un problème pour répondre.', done: true })}\n\n`))
+        } finally {
+          controller.close()
         }
       }
-      controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: fullText, done: true })}\n\n`))
-      controller.close()
-    }
-  })
+    })
 
-  return new Response(readable, {
-    headers: {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
-    }
-  })
+    return new Response(readable, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+      }
+    })
+  } catch (err) {
+    console.error('Chat route fatal error', err)
+    return new Response(
+      `data: ${JSON.stringify({ error: 'erreur serveur', done: true })}\n\n`,
+      { status: 500, headers: { 'Content-Type': 'text/event-stream' } }
+    )
+  }
 }
