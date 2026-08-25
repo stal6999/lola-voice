@@ -50,12 +50,51 @@ export default function LolaScene({
   microExpression = 'none', mobileMode = false,
 }: LolaSceneProps) {
 
-  const [tvPhotoIdx, setTvPhotoIdx] = useState(0)
-  const TV_PHOTOS = ['/lola-fullbody.jpg', '/lola-portrait.jpg', '/lola-smile.jpg', '/lola-thinking.jpg', '/lola-listen.jpg']
+  const [tvPhoteIdx, setTvPhoteIdx] = useState(0) // kept for compat, unused
+  const [quoteIdx, setQuoteIdx] = useState(0)
+  const [rotAngle, setRotAngle] = useState(0)
 
+  // 20 phrases motivantes — changent toutes les 10 minutes
+  const QUOTES = [
+    "L'énergie que tu investis aujourd'hui est le revenu de demain.",
+    "Chaque compteur signé est un pas vers ta liberté.",
+    "La constance bat le talent quand le talent ne travaille pas.",
+    "Un client satisfait vaut dix prospects.",
+    "Ce que tu fais aujourd'hui décide de ce que tu seras en mars 2027.",
+    "Le meilleur moment pour agir, c'est maintenant.",
+    "Ta valeur ne se discute pas — elle se démontre.",
+    "Chaque refus te rapproche du prochain oui.",
+    "La simplicité est la sophistication suprême.",
+    "Travaille pendant qu'ils dorment. Récolte pendant qu'ils rêvent.",
+    "Un système bien construit travaille même quand tu ne travailles pas.",
+    "L'indépendance ne se demande pas — elle se construit.",
+    "Chaque appel passé est une chance que tu prends.",
+    "Le secret de la réussite : la régularité sans exception.",
+    "Ce qui est mesuré est amélioré.",
+    "Fais confiance au processus. Les résultats suivront.",
+    "Ton futur client attend que tu te présentes.",
+    "Une heure de prospection par jour change une vie en un an.",
+    "La crédibilité se bâtit action par action.",
+    "TC Expertise & Énergie — bâtir l'avenir, un compteur à la fois.",
+  ]
+
+  // Citer une nouvelle phrase toutes les 10 minutes (600s)
   useEffect(() => {
-    const id = setInterval(() => setTvPhotoIdx(i => (i + 1) % TV_PHOTOS.length), 5000)
+    const id = setInterval(() => setQuoteIdx(i => (i + 1) % QUOTES.length), 600000)
     return () => clearInterval(id)
+  }, [])
+
+  // Rotation de l'ampoule en mode thinking (20 RPM)
+  useEffect(() => {
+    let frame: number
+    let angle = 0
+    const spin = () => {
+      angle = (angle + 1.2) % 360
+      setRotAngle(angle)
+      frame = requestAnimationFrame(spin)
+    }
+    frame = requestAnimationFrame(spin)
+    return () => cancelAnimationFrame(frame)
   }, [])
 
   const [displayedText, setDisplayedText] = useState('')
@@ -309,49 +348,78 @@ export default function LolaScene({
       {[0,1,2,3,4].map(i => <line key={i} x1="0" y1={480+i*22} x2={VW} y2={480+i*22} stroke="rgba(120,80,30,0.15)" strokeWidth="0.7"/>)}
       {[160,320,480,640].map(x => <line key={x} x1={x} y1="470" x2={x} y2="600" stroke="rgba(100,65,20,0.12)" strokeWidth="0.5"/>)}
 
-      {/* ══ ÉCRAN TV — grand, mural, à droite de Lola, mi-hauteur, sans pied ══ */}
+      {/* ══ ÉCRAN TV — 3 modes selon l'état de Lola ══ */}
+      {/* Cadre TV */}
       <rect x="480" y="120" width="290" height="210" rx="6" fill="#0a0a0a"/>
-      <rect x="486" y="126" width="278" height="198" rx="3" fill="#020f02"/>
-      <rect x="486" y="126" width="278" height="198" rx="3" fill="none" stroke="rgba(0,220,80,0.5)" strokeWidth="1.5"/>
+      <rect x="486" y="126" width="278" height="198" rx="3" fill="#090909"/>
+      <rect x="486" y="126" width="278" height="198" rx="3" fill="none" stroke="rgba(180,150,100,0.25)" strokeWidth="1"/>
       {/* Fixation murale — 2 vis */}
       <circle cx="500" cy="128" r="3" fill="#333"/>
       <circle cx="762" cy="128" r="3" fill="#333"/>
-      {/* Contenu TV : photos si idle/listening, texte si speaking/loading */}
-      {(speaking || loading) ? (
-        <foreignObject x={486} y={126} width={278} height={198}>
-          {/* @ts-expect-error xmlns needed */}
-          <div xmlns="http://www.w3.org/1999/xhtml" style={{
-            width:'100%', height:'100%', padding:'10px 14px',
-            fontFamily:'"Courier New",monospace', fontSize:'11px',
-            color:'#00e855', lineHeight:'1.65', overflowY:'auto',
-            background:'transparent', whiteSpace:'pre-wrap', wordBreak:'break-word',
-            textShadow:'0 0 8px rgba(0,240,80,0.6)',
-          }}>
-            {screenContent ? displayedText : (loading ? '◆ ANALYSE EN COURS...' : '▶ LOLA EN LIGNE...')}
-          </div>
-        </foreignObject>
-      ) : (
-        /* Photo slideshow toutes les 5s */
-        <image
-          href={TV_PHOTOS[tvPhotoIdx]}
-          x={486} y={126} width={278} height={198}
-          preserveAspectRatio="xMidYMid slice"
-          style={{ borderRadius: 3 }}
-        />
+
+      {/* MODE 1 — THINKING/LOADING : ampoule qui tourne */}
+      {(lolaState === 'thinking' || lolaState === 'loading') && (() => {
+        const cx = 625, cy = 225, r = rotAngle * Math.PI / 180
+        return (
+          <g transform={`translate(${cx}, ${cy})`}>
+            {/* Ampoule — corps principal */}
+            <ellipse cx="0" cy="-10" rx="32" ry="35" fill="none" stroke="rgba(255,220,80,0.7)" strokeWidth="2.5"/>
+            {/* Filament intérieur lumineux */}
+            <path d="M -8,-18 Q 0,-10 8,-18 Q 8,-5 0,5 Q -8,-5 -8,-18"
+              fill="none" stroke="rgba(255,200,50,0.9)" strokeWidth="1.5"/>
+            {/* Lueur centrale */}
+            <ellipse cx="0" cy="-10" rx="14" ry="16" fill="rgba(255,230,80,0.12)"/>
+            {/* Base ampoule */}
+            <rect x="-12" y="25" width="24" height="6" rx="2" fill="rgba(255,220,80,0.5)"/>
+            <rect x="-9" y="31" width="18" height="5" rx="1" fill="rgba(255,220,80,0.4)"/>
+            <rect x="-6" y="36" width="12" height="4" rx="1" fill="rgba(255,220,80,0.3)"/>
+            {/* Rayons lumineux qui tournent */}
+            {[0,45,90,135,180,225,270,315].map((deg, i) => {
+              const rad = (deg + rotAngle) * Math.PI / 180
+              const x1 = Math.cos(rad) * 40, y1 = Math.sin(rad) * 40
+              const x2 = Math.cos(rad) * 55, y2 = Math.sin(rad) * 55
+              return <line key={i} x1={x1} y1={y1-10} x2={x2} y2={y2-10}
+                stroke="rgba(255,220,80,0.35)" strokeWidth="1.5"/>
+            })}
+            {/* Texte sous l'ampoule */}
+            <text y="65" textAnchor="middle" fontFamily="Georgia,serif" fontSize="11"
+              fill="rgba(255,220,80,0.6)" letterSpacing="2">RÉFLEXION</text>
+          </g>
+        )
+      })()}
+
+      {/* MODE 2 — IDLE/LISTENING/SPEAKING/HAPPY : phrase motivante */}
+      {(lolaState === 'idle' || lolaState === 'listening' || lolaState === 'speaking' || lolaState === 'happy' || lolaState === 'alert') && (
+        <g>
+          {/* Logo TC Expertise en haut — petit, élégant */}
+          <text x="625" y="156" textAnchor="middle"
+            fontFamily="Georgia,serif" fontSize="9"
+            fill="rgba(201,168,76,0.5)" letterSpacing="2">
+            TC EXPERTISE & ÉNERGIE
+          </text>
+          <line x1="516" y1="162" x2="734" y2="162" stroke="rgba(201,168,76,0.2)" strokeWidth="0.5"/>
+          {/* Citation motivante — centrée, belle typo */}
+          <foreignObject x={492} y={168} width={268} height={130}>
+            {/* @ts-expect-error xmlns needed */}
+            <div xmlns="http://www.w3.org/1999/xhtml" style={{
+              width: '100%', height: '100%',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              padding: '8px 16px',
+              fontFamily: 'Georgia, serif',
+              fontSize: '13px',
+              color: 'rgba(220,200,160,0.85)',
+              lineHeight: '1.7',
+              textAlign: 'center',
+              fontStyle: 'italic',
+            }}>
+              {QUOTES[quoteIdx]}
+            </div>
+          </foreignObject>
+          {/* Ligne déco bas */}
+          <line x1="516" y1="302" x2="734" y2="302" stroke="rgba(201,168,76,0.15)" strokeWidth="0.5"/>
+        </g>
       )}
-      {/* Overlay vert subtil sur les photos */}
-      {(!speaking && !loading) && (
-        <rect x="486" y="126" width="278" height="198" rx="3" fill="rgba(0,20,0,0.15)"/>
-      )}
-      {/* Waveform si parle */}
-      {speaking && Array.from({length:14},(_,i) => {
-        const bh = 7+Math.sin(i*1.1)*14
-        return <rect key={i} x={496+i*18} y={200-bh/2} width={13} height={bh} rx="3"
-          fill="rgba(0,230,80,0.6)">
-          <animate attributeName="height" values={`${bh};${4+Math.random()*22};${bh}`}
-            dur={`${0.2+i*0.04}s`} repeatCount="indefinite"/>
-        </rect>
-      })}
+
 
       {/* ══ LOLA — remplacée par Lola3D VRM (voir components/Lola3D.tsx) ══ */}
 
