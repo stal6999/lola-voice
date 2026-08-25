@@ -40,6 +40,7 @@ export default function LolaPage() {
   const [screenImage, setScreenImage]     = useState<string | null>(null)
   const [screenCaption, setScreenCaption] = useState<string | null>(null)
   const [errorBanner, setErrorBanner]     = useState<string | null>(null)
+  const [triggerGesture, setTriggerGesture] = useState<string | null>(null)
 
   // ── UI state ──
   const [winW, setWinW]           = useState(1280)
@@ -141,12 +142,13 @@ export default function LolaPage() {
               const data = JSON.parse(line.slice(6))
               if (data.error) throw new Error(data.error)
               if (data.done) {
-                const { clean, emotion } = parseLolaResponse(fullText)
+                const { clean, emotion, gesture } = parseLolaResponse(fullText)
                 const lolaMsg: Message = { role: 'assistant', content: clean }
                 setMessages([...history, lolaMsg])
                 setLoading(false)
                 if (emotion === 'happy') setLolaState('happy')
                 else if (emotion === 'surprised') setLolaState('alert')
+                if (gesture) setTriggerGesture(gesture)
                 playTTS(clean)
               } else {
                 fullText += data.text
@@ -288,6 +290,7 @@ export default function LolaPage() {
           winW={winW} winH={winH}
           screenImage={screenImage} screenCaption={screenCaption}
           speaking={speaking} listening={listening} loading={loading} lolaState={lolaState}
+          triggerGesture={triggerGesture}
           messages={messages} input={input} setInput={setInput}
           liveTranscript={liveTranscript}
           onSend={() => sendMessage(input)}
@@ -304,6 +307,7 @@ export default function LolaPage() {
           winW={winW} winH={winH}
           screenImage={screenImage} screenCaption={screenCaption}
           speaking={speaking} listening={listening} loading={loading} lolaState={lolaState}
+          triggerGesture={triggerGesture}
           messages={messages} input={input} setInput={setInput}
           liveTranscript={liveTranscript}
           onSend={() => sendMessage(input)}
@@ -341,7 +345,7 @@ export default function LolaPage() {
 /* ════════════════════════════════════════════════════
    LAYOUT PC — Lola debout à gauche, écran géant à droite
 ════════════════════════════════════════════════════ */
-function PCLayout({ winW, winH, screenImage, screenCaption, speaking, listening, loading, lolaState,
+function PCLayout({ winW, winH, screenImage, screenCaption, speaking, listening, loading, lolaState, triggerGesture,
   messages, input, setInput, liveTranscript, onSend, onToggleConversation,
   conversationMode, onToggleMute, muted, onFileClick, onCameraClick, fileReady,
   statusColor, statusLabel, chatEndRef }: any) {
@@ -383,7 +387,7 @@ function PCLayout({ winW, winH, screenImage, screenCaption, speaking, listening,
       <div style={{ width: lolaColW, height: winH, position: 'relative', overflow: 'hidden', flexShrink: 0 }}>
         <LolaScene width={lolaColW} height={winH} speaking={speaking} listening={listening} loading={loading} lolaState={lolaState} />
         <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
-          <Lola3D width={lolaColW} height={winH} lolaState={lolaState} speaking={speaking} listening={listening} loading={loading} />
+          <Lola3D width={lolaColW} height={winH} lolaState={lolaState} speaking={speaking} listening={listening} loading={loading} triggerGesture={triggerGesture} />
         </div>
 
         {/* Status badge */}
@@ -455,7 +459,7 @@ function PCLayout({ winW, winH, screenImage, screenCaption, speaking, listening,
 /* ════════════════════════════════════════════════════
    LAYOUT MOBILE — écran en fond, Lola en avant-plan à hauteur d'écran
 ════════════════════════════════════════════════════ */
-function MobileLayout({ winW, winH, screenImage, screenCaption, speaking, listening, loading, lolaState,
+function MobileLayout({ winW, winH, screenImage, screenCaption, speaking, listening, loading, lolaState, triggerGesture,
   messages, input, setInput, liveTranscript, onSend, onToggleConversation, conversationMode,
   onToggleMute, muted, onFileClick, onCameraClick, fileReady,
   statusColor, statusLabel, chatEndRef }: any) {
@@ -484,7 +488,7 @@ function MobileLayout({ winW, winH, screenImage, screenCaption, speaking, listen
           height: stageH,
           pointerEvents: 'none',
         }}>
-          <Lola3D width={Math.round(stageH * 0.5)} height={stageH} lolaState={lolaState} speaking={speaking} listening={listening} loading={loading} />
+          <Lola3D width={Math.round(stageH * 0.5)} height={stageH} lolaState={lolaState} speaking={speaking} listening={listening} loading={loading} triggerGesture={triggerGesture} />
         </div>
 
         <div style={{ position: 'absolute', top: 8, left: 10, display: 'flex', alignItems: 'center', gap: 5, zIndex: 10 }}>

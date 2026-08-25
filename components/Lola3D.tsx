@@ -16,6 +16,7 @@ interface Lola3DProps {
   listening?: boolean
   loading?: boolean
   analyser?: AnalyserNode | null
+  triggerGesture?: string | null   // 'wave' | 'nod' | 'think' | 'bow' | 'clap' — one-shot depuis motion tags Claude
   onReady?: () => void
 }
 
@@ -70,7 +71,7 @@ function applyRestPose(vrm: VRM) {
 export default function Lola3D({
   width, height, lolaState = 'idle',
   speaking = false, listening = false, loading = false,
-  analyser,
+  analyser, triggerGesture,
   onReady,
 }: Lola3DProps) {
   const canvasRef    = useRef<HTMLCanvasElement>(null)
@@ -83,6 +84,7 @@ export default function Lola3D({
   const stateRef     = useRef(lolaState)
   const speakRef     = useRef(speaking)
   const listenRef    = useRef(listening)
+  const gestureQueueRef = useRef<string | null>(null)
   // FIX 6: Ref pour l'analyser FFT (lip-sync réel)
   const analyserRef  = useRef<AnalyserNode | null>(null)
   const fftDataRef   = useRef<Uint8Array<ArrayBuffer> | null>(null)
@@ -91,6 +93,8 @@ export default function Lola3D({
   useEffect(() => { stateRef.current  = lolaState }, [lolaState])
   useEffect(() => { speakRef.current  = speaking  }, [speaking])
   useEffect(() => { listenRef.current = listening }, [listening])
+  // Motion tag Claude ([gesture:wave] etc.) → mis en file pour être consommé au prochain cycle 'speaking'
+  useEffect(() => { if (triggerGesture) gestureQueueRef.current = triggerGesture }, [triggerGesture])
 
   // FIX 6: Mettre à jour l'analyser quand il change depuis page.tsx
   useEffect(() => {
@@ -184,6 +188,8 @@ export default function Lola3D({
       const vrm = gltf.userData.vrm as VRM
       VRMUtils.combineMorphs(vrm)
       VRMUtils.removeUnnecessaryVertices(vrm.scene)
+      // Sécurité VRoid Studio : les VRM0 sont orientés dos à la caméra — rotateVRM0 est un no-op sur VRM1
+      VRMUtils.rotateVRM0(vrm)
       vrm.scene.position.set(0, 0, 0)
 
       // Shader nacré sur toute la peau
@@ -343,14 +349,39 @@ export default function Lola3D({
         }
 
         case 'speaking': {
-          // Gestes de conversation variés toutes les 3s
-          if (gestureTimer > 3.0) {
+          // Geste explicite depuis motion tag Claude — prioritaire, joué une fois
+          const queued = gestureQueueRef.current
+          if (queued) {
+            gestureQueueRef.current = null
+            currentGesture = queued === 'wave' ? 4 : queued === 'nod' ? 5 : queued === 'bow' ? 6 : currentGesture
             gestureTimer = 0
-            currentGesture = (currentGesture + 1) % 4
+          }
+          // Gestes de conversation — variés, tirage pseudo-aléatoire (pas de cycle prévisible)
+          else if (gestureTimer > 2.4 + noise3D(t * 0.03, 500, 0) * 1.2) {
+            gestureTimer = 0
+            let next = Math.floor(Math.random() * 4)
+            if (next === currentGesture) next = (next + 1) % 4
+            currentGesture = next
           }
           const g = Math.sin(t * 1.6) * 0.1
 
-          if (currentGesture === 0) {
+          if (currentGesture === 4) {
+            // Geste "wave" — salut de la main droite
+            const wave = Math.sin(t * 6) * 0.35
+            lerpRot(vrm, RSho, -0.9, -0.2, 0.7, 0.12)
+            lerpRot(vrm, RElb, -0.6 + wave * 0.3, 0, 0.3, 0.12)
+            lerpRot(vrm, RWri, wave, 0, 0, 0.15)
+            lerpRot(vrm, LSho,  0.04, 0, -1.0, 0.06)
+          } else if (currentGesture === 5) {
+            // Geste "nod" — hochement de tête affirmatif (approx via chest/head déjà géré, ici bras au repos)
+            lerpRot(vrm, LSho, 0.04, 0, -1.05, 0.06)
+            lerpRot(vrm, RSho, 0.04, 0,  1.05, 0.06)
+          } else if (currentGesture === 6) {
+            // Geste "bow" — légère révérence, buste incliné
+            lerpRot(vrm, Chest, 0.15 + breath * 0.3, 0, 0, 0.08)
+            lerpRot(vrm, LSho, -0.1, 0, -0.9, 0.06)
+            lerpRot(vrm, RSho, -0.1, 0,  0.9, 0.06)
+          } else if (currentGesture === 0) {
             // Bras gauche animé — geste expressif
             lerpRot(vrm, LSho, -0.2 - g*0.3, 0, -0.8 - g, 0.06)
             lerpRot(vrm, LElb, -0.3 + g*0.2, 0, -0.15,    0.06)
