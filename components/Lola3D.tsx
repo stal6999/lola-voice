@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useEffect, useState, useCallback } from 'react'
+import { useRef, useEffect, useState, useCallback, type RefObject } from 'react'
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { VRMLoaderPlugin, VRMUtils, type VRM, VRMHumanBoneName } from '@pixiv/three-vrm'
@@ -17,6 +17,8 @@ interface Lola3DProps {
   loading?: boolean
   analyser?: AnalyserNode | null
   triggerGesture?: string | null   // 'wave' | 'nod' | 'think' | 'bow' | 'clap' — one-shot depuis motion tags Claude
+  visemeTimeline?: { start: number; end: number; viseme: 'aa' | 'ou' | 'ih' | 'closed' }[]
+  audioRef?: RefObject<HTMLAudioElement | null>
   onReady?: () => void
 }
 
@@ -71,7 +73,7 @@ function applyRestPose(vrm: VRM) {
 export default function Lola3D({
   width, height, lolaState = 'idle',
   speaking = false, listening = false, loading = false,
-  analyser, triggerGesture,
+  analyser, triggerGesture, visemeTimeline, audioRef,
   onReady,
 }: Lola3DProps) {
   const canvasRef    = useRef<HTMLCanvasElement>(null)
@@ -85,6 +87,8 @@ export default function Lola3D({
   const speakRef     = useRef(speaking)
   const listenRef    = useRef(listening)
   const gestureQueueRef = useRef<string | null>(null)
+  const visemeTimelineRef = useRef(visemeTimeline)
+  useEffect(() => { visemeTimelineRef.current = visemeTimeline }, [visemeTimeline])
   // FIX 6: Ref pour l'analyser FFT (lip-sync réel)
   const analyserRef  = useRef<AnalyserNode | null>(null)
   const fftDataRef   = useRef<Uint8Array<ArrayBuffer> | null>(null)
@@ -432,24 +436,34 @@ export default function Lola3D({
         }
       }
 
-      // ── LIP-SYNC — FIX 6: FFT réel si analyser dispo, sinon Math.sin fallback ──
+      // ── LIP-SYNC — priorité : timeline de visèmes réel (ElevenLabs timestamps) > FFT > Math.sin fallback ──
       if (isSpeaking) {
-        const vocal = getVocalAmplitude()
-        if (vocal >= 0) {
-          // FIX 6: Amplitude audio réelle depuis FFT
-          const mouthOpen = Math.min(1, vocal / 90)
-          lerpMorph(vrm, 'aa', mouthOpen, 0.4)
-          // Variantes vocaliques dérivées de l'amplitude
-          lerpMorph(vrm, 'ou', mouthOpen * 0.4, 0.3)
-          lerpMorph(vrm, 'ih', mouthOpen * 0.25, 0.25)
+        const timeline = visemeTimelineRef.current
+        const audioEl = audioRef?.current
+        if (timeline && timeline.length > 0 && audioEl) {
+          const now = audioEl.currentTime
+          const entry = timeline.find(e => now >= e.start && now < e.end)
+          const target = entry?.viseme ?? 'closed'
+          lerpMorph(vrm, 'aa', target === 'aa' ? 0.85 : 0, 0.55)
+          lerpMorph(vrm, 'ou', target === 'ou' ? 0.7  : 0, 0.5)
+          lerpMorph(vrm, 'ih', target === 'ih' ? 0.6  : 0, 0.5)
         } else {
-          // Fallback Math.sin si pas d'analyser
-          const mA  = Math.max(0, Math.sin(t * 8.5)  * 0.5  + 0.15)
-          const mO  = Math.max(0, Math.sin(t * 6.0)  * 0.25 + 0.05)
-          const mI  = Math.max(0, Math.sin(t * 10.0) * 0.2)
-          lerpMorph(vrm, 'aa', mA,  0.4)
-          lerpMorph(vrm, 'ou', mO,  0.3)
-          lerpMorph(vrm, 'ih', mI,  0.25)
+          const vocal = getVocalAmplitude()
+          if (vocal >= 0) {
+            // FIX 6: Amplitude audio réelle depuis FFT
+            const mouthOpen = Math.min(1, vocal / 90)
+            lerpMorph(vrm, 'aa', mouthOpen, 0.4)
+            lerpMorph(vrm, 'ou', mouthOpen * 0.4, 0.3)
+            lerpMorph(vrm, 'ih', mouthOpen * 0.25, 0.25)
+          } else {
+            // Fallback Math.sin si pas d'analyser ni de timeline
+            const mA  = Math.max(0, Math.sin(t * 8.5)  * 0.5  + 0.15)
+            const mO  = Math.max(0, Math.sin(t * 6.0)  * 0.25 + 0.05)
+            const mI  = Math.max(0, Math.sin(t * 10.0) * 0.2)
+            lerpMorph(vrm, 'aa', mA,  0.4)
+            lerpMorph(vrm, 'ou', mO,  0.3)
+            lerpMorph(vrm, 'ih', mI,  0.25)
+          }
         }
       } else {
         lerpMorph(vrm, 'aa', 0, 0.25)

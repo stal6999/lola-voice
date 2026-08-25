@@ -14,8 +14,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'ELEVENLABS_API_KEY manquante' }, { status: 500 })
     }
 
-    // FIX 4: Modèle turbo pour latence -40% (eleven_turbo_v2_5 vs eleven_multilingual_v2)
-    const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
+    // /with-timestamps : renvoie l'audio ET l'alignement caractère-par-caractère
+    // (vrai lip-sync possible, au lieu d'une approximation FFT sur l'amplitude)
+    const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}/with-timestamps`, {
       method: 'POST',
       headers: { 'xi-api-key': apiKey, 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -29,23 +30,19 @@ export async function POST(req: NextRequest) {
     if (!res.ok) {
       const errText = await res.text().catch(() => '')
       console.error('ElevenLabs TTS error', res.status, errText.slice(0, 300))
-      return NextResponse.json(
-        { error: 'voix indisponible', status: res.status },
-        { status: 502 }
-      )
+      return NextResponse.json({ error: 'voix indisponible', status: res.status }, { status: 502 })
     }
 
-    const audio = await res.arrayBuffer()
-    if (!audio || audio.byteLength === 0) {
+    const data = await res.json()
+    if (!data?.audio_base64) {
       return NextResponse.json({ error: 'audio vide' }, { status: 502 })
     }
 
-    return new NextResponse(audio, {
-      headers: {
-        'Content-Type': 'audio/mpeg',
-        // FIX 4: Désactiver le buffering nginx pour streaming immédiat
-        'X-Accel-Buffering': 'no',
-      },
+    return NextResponse.json({
+      audio: data.audio_base64,
+      alignment: data.alignment ?? null,
+    }, {
+      headers: { 'X-Accel-Buffering': 'no' },
     })
   } catch (err) {
     console.error('TTS route fatal error', err)

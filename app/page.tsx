@@ -14,6 +14,27 @@ const Lola3D = dynamic(() => import('@/components/Lola3D'), {
 
 type Message = { role: 'user' | 'assistant'; content: string }
 type LolaState = 'idle' | 'listening' | 'thinking' | 'speaking' | 'loading' | 'alert' | 'happy'
+type VisemeEntry = { start: number; end: number; viseme: 'aa' | 'ou' | 'ih' | 'closed' }
+
+// Heuristique simple caractère → visème (français) — permet un vrai lip-sync
+// synchronisé sur les timestamps ElevenLabs au lieu d'une approximation FFT.
+function charToViseme(ch: string): VisemeEntry['viseme'] {
+  const c = ch.toLowerCase()
+  if ('aàâ'.includes(c)) return 'aa'
+  if ('oôuûœ'.includes(c)) return 'ou'
+  if ('eéèêiîy'.includes(c)) return 'ih'
+  return 'closed'
+}
+
+function buildVisemeTimeline(alignment: any): VisemeEntry[] {
+  if (!alignment?.characters?.length) return []
+  const { characters, character_start_times_seconds: starts, character_end_times_seconds: ends } = alignment
+  const timeline: VisemeEntry[] = []
+  for (let i = 0; i < characters.length; i++) {
+    timeline.push({ start: starts[i], end: ends[i], viseme: charToViseme(characters[i]) })
+  }
+  return timeline
+}
 
 // Parser les motion tags dans les réponses de Lola
 function parseLolaResponse(text: string): { clean: string; emotion: string | null; gesture: string | null } {
@@ -41,6 +62,7 @@ export default function LolaPage() {
   const [screenCaption, setScreenCaption] = useState<string | null>(null)
   const [errorBanner, setErrorBanner]     = useState<string | null>(null)
   const [triggerGesture, setTriggerGesture] = useState<string | null>(null)
+  const [visemeTimeline, setVisemeTimeline] = useState<VisemeEntry[]>([])
 
   // ── UI state ──
   const [winW, setWinW]           = useState(1280)
@@ -165,23 +187,34 @@ export default function LolaPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // ── TTS ──
+  // ── TTS avec timestamps — vrai lip-sync ──
   async function playTTS(text: string) {
     setSpeaking(true)
     try {
       const res = await fetch('/api/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) })
       if (!res.ok) throw new Error(`tts http ${res.status}`)
-      const blob = await res.blob()
-      if (blob.size === 0) throw new Error('tts empty blob')
+      const data = await res.json()
+      if (!data?.audio) throw new Error('tts empty audio')
+
+      // Décoder le base64 en blob audio jouable
+      const byteChars = atob(data.audio)
+      const byteNumbers = new Array(byteChars.length)
+      for (let i = 0; i < byteChars.length; i++) byteNumbers[i] = byteChars.charCodeAt(i)
+      const blob = new Blob([new Uint8Array(byteNumbers)], { type: 'audio/mpeg' })
       const url = URL.createObjectURL(blob)
+
+      // Timeline de visèmes pour le lip-sync réel (fallback FFT/sin si absent côté Lola3D)
+      setVisemeTimeline(data.alignment ? buildVisemeTimeline(data.alignment) : [])
+
       if (!audioRef.current) { const a = document.createElement('audio'); a.setAttribute('playsinline', ''); document.body.appendChild(a); audioRef.current = a }
       const audio = audioRef.current; audio.pause(); audio.src = url; audio.volume = 1
-      audio.onended = () => { setSpeaking(false); if (convModeRef.current && !mutedRef.current) setTimeout(() => startListening(), 800) }
-      audio.onerror = () => { setSpeaking(false); setErrorBanner('Voix indisponible pour cette réponse.') }
+      audio.onended = () => { setSpeaking(false); setVisemeTimeline([]); if (convModeRef.current && !mutedRef.current) setTimeout(() => startListening(), 800) }
+      audio.onerror = () => { setSpeaking(false); setVisemeTimeline([]); setErrorBanner('Voix indisponible pour cette réponse.') }
       await audio.play()
     } catch (err) {
       console.error('playTTS error', err)
       setSpeaking(false)
+      setVisemeTimeline([])
       setErrorBanner('Voix indisponible — réponse en texte seulement.')
     }
   }
@@ -290,7 +323,7 @@ export default function LolaPage() {
           winW={winW} winH={winH}
           screenImage={screenImage} screenCaption={screenCaption}
           speaking={speaking} listening={listening} loading={loading} lolaState={lolaState}
-          triggerGesture={triggerGesture}
+          triggerGesture={triggerGesture} visemeTimeline={visemeTimeline} audioRef={audioRef}
           messages={messages} input={input} setInput={setInput}
           liveTranscript={liveTranscript}
           onSend={() => sendMessage(input)}
@@ -307,7 +340,7 @@ export default function LolaPage() {
           winW={winW} winH={winH}
           screenImage={screenImage} screenCaption={screenCaption}
           speaking={speaking} listening={listening} loading={loading} lolaState={lolaState}
-          triggerGesture={triggerGesture}
+          triggerGesture={triggerGesture} visemeTimeline={visemeTimeline} audioRef={audioRef}
           messages={messages} input={input} setInput={setInput}
           liveTranscript={liveTranscript}
           onSend={() => sendMessage(input)}
@@ -345,7 +378,7 @@ export default function LolaPage() {
 /* ════════════════════════════════════════════════════
    LAYOUT PC — Lola debout à gauche, écran géant à droite
 ════════════════════════════════════════════════════ */
-function PCLayout({ winW, winH, screenImage, screenCaption, speaking, listening, loading, lolaState, triggerGesture,
+function PCLayout({ winW, winH, screenImage, screenCaption, speaking, listening, loading, lolaState, triggerGesture, visemeTimeline, audioRef,
   messages, input, setInput, liveTranscript, onSend, onToggleConversation,
   conversationMode, onToggleMute, muted, onFileClick, onCameraClick, fileReady,
   statusColor, statusLabel, chatEndRef }: any) {
@@ -387,7 +420,7 @@ function PCLayout({ winW, winH, screenImage, screenCaption, speaking, listening,
       <div style={{ width: lolaColW, height: winH, position: 'relative', overflow: 'hidden', flexShrink: 0 }}>
         <LolaScene width={lolaColW} height={winH} speaking={speaking} listening={listening} loading={loading} lolaState={lolaState} />
         <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
-          <Lola3D width={lolaColW} height={winH} lolaState={lolaState} speaking={speaking} listening={listening} loading={loading} triggerGesture={triggerGesture} />
+          <Lola3D width={lolaColW} height={winH} lolaState={lolaState} speaking={speaking} listening={listening} loading={loading} triggerGesture={triggerGesture} visemeTimeline={visemeTimeline} audioRef={audioRef} />
         </div>
 
         {/* Status badge */}
@@ -459,7 +492,7 @@ function PCLayout({ winW, winH, screenImage, screenCaption, speaking, listening,
 /* ════════════════════════════════════════════════════
    LAYOUT MOBILE — écran en fond, Lola en avant-plan à hauteur d'écran
 ════════════════════════════════════════════════════ */
-function MobileLayout({ winW, winH, screenImage, screenCaption, speaking, listening, loading, lolaState, triggerGesture,
+function MobileLayout({ winW, winH, screenImage, screenCaption, speaking, listening, loading, lolaState, triggerGesture, visemeTimeline, audioRef,
   messages, input, setInput, liveTranscript, onSend, onToggleConversation, conversationMode,
   onToggleMute, muted, onFileClick, onCameraClick, fileReady,
   statusColor, statusLabel, chatEndRef }: any) {
@@ -488,7 +521,7 @@ function MobileLayout({ winW, winH, screenImage, screenCaption, speaking, listen
           height: stageH,
           pointerEvents: 'none',
         }}>
-          <Lola3D width={Math.round(stageH * 0.5)} height={stageH} lolaState={lolaState} speaking={speaking} listening={listening} loading={loading} triggerGesture={triggerGesture} />
+          <Lola3D width={Math.round(stageH * 0.5)} height={stageH} lolaState={lolaState} speaking={speaking} listening={listening} loading={loading} triggerGesture={triggerGesture} visemeTimeline={visemeTimeline} audioRef={audioRef} />
         </div>
 
         <div style={{ position: 'absolute', top: 8, left: 10, display: 'flex', alignItems: 'center', gap: 5, zIndex: 10 }}>
