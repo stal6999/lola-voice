@@ -350,12 +350,20 @@ export default function LolaScene({
 
       {/* ══ ÉCRAN TV — 3 modes selon l'état de Lola ══ */}
       {/* Cadre TV */}
-      <rect x="480" y="120" width="290" height="210" rx="6" fill="#0a0a0a"/>
-      <rect x="486" y="126" width="278" height="198" rx="3" fill="#090909"/>
-      <rect x="486" y="126" width="278" height="198" rx="3" fill="none" stroke="rgba(180,150,100,0.25)" strokeWidth="1"/>
+      <rect x="480" y="120" width="290" height="210" rx="6" fill="#111008"/>
+      {/* Écran avec dégradé chaud */}
+      <defs>
+        <linearGradient id="tvGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#1a1508"/>
+          <stop offset="100%" stopColor="#0d0c06"/>
+        </linearGradient>
+      </defs>
+      <rect x="486" y="126" width="278" height="198" rx="3" fill="url(#tvGrad)"/>
+      {/* Bordure dorée subtile */}
+      <rect x="486" y="126" width="278" height="198" rx="3" fill="none" stroke="rgba(201,168,76,0.4)" strokeWidth="1"/>
       {/* Fixation murale — 2 vis */}
-      <circle cx="500" cy="128" r="3" fill="#333"/>
-      <circle cx="762" cy="128" r="3" fill="#333"/>
+      <circle cx="500" cy="128" r="3" fill="#2a2415"/>
+      <circle cx="762" cy="128" r="3" fill="#2a2415"/>
 
       {/* MODE 1 — THINKING/LOADING : ampoule qui tourne */}
       {(lolaState === 'thinking' || lolaState === 'loading') && (() => {
@@ -423,26 +431,18 @@ export default function LolaScene({
 
       {/* ══ LOLA — remplacée par Lola3D VRM (voir components/Lola3D.tsx) ══ */}
 
-      {/* ══ BARRE BAS TICKER ══ */}
-      <rect x="0" y={VH-26} width={VW} height="26" fill="rgba(8,6,2,0.93)"/>
-      <line x1="0" y1={VH-26} x2={VW} y2={VH-26} stroke="rgba(201,168,76,0.3)" strokeWidth="1"/>
-      {/* Badge état */}
-      <rect x="8" y={VH-20} width="88" height="14" rx="3" fill={statusColor} opacity="0.85"/>
-      <text x="52" y={VH-10} textAnchor="middle" fontFamily="monospace" fontSize="7.5"
-        fill="white" fontWeight="700" letterSpacing="1.5">
-        {listening?'⏺ ÉCOUTE':speaking?'▶ PARLE':loading?'◆ ANALYSE':'● EN LIGNE'}
+      {/* ══ BARRE BAS — indicateur état, discrète ══ */}
+      <rect x="0" y={VH-14} width={VW} height="14" fill="rgba(8,6,2,0.85)"/>
+      <line x1="0" y1={VH-14} x2={VW} y2={VH-14} stroke="rgba(201,168,76,0.2)" strokeWidth="0.5"/>
+      {/* Badge état — petit point coloré */}
+      <circle cx="10" cy={VH-7} r="4" fill={statusColor} opacity="0.9"/>
+      <text x="18" y={VH-3} fontFamily="monospace" fontSize="6.5"
+        fill="rgba(255,240,200,0.5)" letterSpacing="1">
+        {listening?'ÉCOUTE':speaking?'PARLE':loading?'ANALYSE':'EN LIGNE'}
       </text>
-      {/* Séparateur */}
-      <line x1="102" y1={VH-23} x2="102" y2={VH-3} stroke="rgba(201,168,76,0.25)" strokeWidth="1"/>
-      {/* Ticker */}
-      <clipPath id="s-tick-clip"><rect x="106" y={VH-26} width={VW-200} height="26"/></clipPath>
-      <text x={tickerX+106} y={VH-10} fontFamily="monospace" fontSize="9"
-        fill="rgba(255,240,200,0.55)" letterSpacing="1" clipPath="url(#s-tick-clip)">
-        Lola — TC Expertise &amp; Énergie  •  Assistante IA personnelle  •  lola-voice.vercel.app
-      </text>
-      {/* Logo */}
-      <text x={VW-10} y={VH-13} textAnchor="end" fontFamily="Georgia,serif" fontSize="8.5"
-        fill="rgba(201,168,76,0.5)">TC Expertise &amp; Énergie</text>
+      {/* Logo discret à droite */}
+      <text x={VW-6} y={VH-3} textAnchor="end" fontFamily="Georgia,serif" fontSize="6.5"
+        fill="rgba(201,168,76,0.35)">TC Expertise &amp; Énergie</text>
 
       <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}`}</style>
     </svg>

@@ -173,13 +173,18 @@ export default function LolaPage() {
             try {
               const data = JSON.parse(line.slice(6))
               if (data.done) {
-                // Réponse complète reçue
-                const lolaMsg: Message = { role: 'assistant', content: fullText }
+                // Réponse complète — nettoyer les motion tags avant affichage
+                const { clean, emotion, gesture } = parseLolaResponse(fullText)
+                const lolaMsg: Message = { role: 'assistant', content: clean }
                 setMessages([...history, lolaMsg])
-                setLastResponse(fullText)
+                setLastResponse(clean)
                 setLoading(false); setExpression('smiling')
-                setScreenContent(fullText)
-                playTTS(fullText)
+                setScreenContent(clean)
+                // Appliquer l'émotion détectée
+                if (emotion === 'happy') setLolaState('happy')
+                else if (emotion === 'surprised') setLolaState('alert')
+                else if (emotion === 'sad') setLolaState('idle')
+                playTTS(clean)
               } else {
                 fullText += data.text
                 // Afficher en temps réel dans la zone conversation
@@ -203,7 +208,7 @@ export default function LolaPage() {
       const audio = audioRef.current; audio.pause(); audio.src = url; audio.volume = 1
       let lip: ReturnType<typeof setInterval> | null = null
       audio.onplay = () => { let f = 0; lip = setInterval(() => { f++; setMouthState((['closed','half','open','half'] as MouthState[])[f%4]) }, 115) }
-      audio.onended = () => { if (lip) clearInterval(lip); setSpeaking(false); setExpression('neutral'); setMouthState('closed'); if (convModeRef.current && !mutedRef.current) setTimeout(() => startListening(), 350) }
+      audio.onended = () => { if (lip) clearInterval(lip); setSpeaking(false); setExpression('neutral'); setMouthState('closed'); if (convModeRef.current && !mutedRef.current) setTimeout(() => startListening(), 800) }
       audio.onerror = () => { if (lip) clearInterval(lip); setSpeaking(false); setExpression('neutral'); setMouthState('closed') }
       audio.play()
     } catch { setSpeaking(false); setExpression('neutral') }
