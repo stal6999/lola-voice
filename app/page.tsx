@@ -80,8 +80,27 @@ export default function LolaPage() {
   const mutedRef        = useRef(false)
   const chatEndRef      = useRef<HTMLDivElement>(null)
   const fileInputRef    = useRef<HTMLInputElement>(null)
+  const sessionIdRef    = useRef<string>('')
 
   useEffect(() => { messagesRef.current = messages }, [messages])
+
+  // ── Session persistante + chargement historique (Supabase) ──
+  useEffect(() => {
+    let sid = localStorage.getItem('lola_session_id')
+    if (!sid) {
+      sid = `lola_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
+      localStorage.setItem('lola_session_id', sid)
+    }
+    sessionIdRef.current = sid
+    fetch(`/api/history?sessionId=${encodeURIComponent(sid)}`)
+      .then(r => r.json())
+      .then(data => {
+        if (Array.isArray(data.messages) && data.messages.length > 0) {
+          setMessages(data.messages)
+        }
+      })
+      .catch(() => {}) // Historique optionnel — jamais bloquant
+  }, [])
 
   // ── Window size ──
   useEffect(() => {
@@ -143,7 +162,7 @@ export default function LolaPage() {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: history })
+        body: JSON.stringify({ messages: history, sessionId: sessionIdRef.current })
       })
       if (!res.ok || !res.body) {
         throw new Error(`chat http ${res.status}`)
@@ -260,7 +279,7 @@ export default function LolaPage() {
         fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ messages: history, image: { data: b64, mediaType } })
+          body: JSON.stringify({ messages: history, image: { data: b64, mediaType }, sessionId: sessionIdRef.current })
         }).then(async r => {
           if (!r.ok) throw new Error(`chat http ${r.status}`)
           return r.json()

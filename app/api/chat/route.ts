@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { LOLA_STATIC_CONTEXT } from '@/lib/lola-context'
+import { saveMessage } from '@/lib/supabase'
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
@@ -54,7 +55,7 @@ function buildDynamicContext(): string {
 
 export async function POST(req: NextRequest) {
   try {
-    const { messages, image } = await req.json()
+    const { messages, image, sessionId } = await req.json()
 
     if (!Array.isArray(messages) || messages.length === 0) {
       return new Response(
@@ -62,6 +63,10 @@ export async function POST(req: NextRequest) {
         { status: 400, headers: { 'Content-Type': 'text/event-stream' } }
       )
     }
+
+    // Sauvegarde non-bloquante du message utilisateur (Supabase optionnel — jamais de blocage si absent/en panne)
+    const lastUserMsg = messages[messages.length - 1]?.content || ''
+    if (sessionId && lastUserMsg) saveMessage(sessionId, 'user', lastUserMsg)
 
     // Détecter si réponse vocale (plus courte) ou texte (plus longue)
     const lastMsg = messages[messages.length - 1]?.content || ''
@@ -108,6 +113,7 @@ export async function POST(req: NextRequest) {
             }
           }
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: fullText, done: true })}\n\n`))
+          if (sessionId && fullText) saveMessage(sessionId, 'assistant', fullText)
         } catch (err) {
           console.error('Claude stream error', err)
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: 'Lola a rencontré un problème pour répondre.', done: true })}\n\n`))
